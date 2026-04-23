@@ -1,0 +1,299 @@
+/* ============================================
+   YOUTUBE CLIPPER - CONTENT STYLES
+   ============================================ */
+
+/* Clip Button */
+#yt-clipper-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  margin-left: 8px !important;
+  cursor: pointer !important;
+}
+
+#yt-clipper-btn svg {
+  width: 24px;
+  height: 24px;
+}
+
+/* Clip Panel */
+#yt-clipper-panel {
+  position: fixed !important;
+  top: 80px !important;
+  right: 20px !important;
+  width: 340px !important;
+  background: #0f0f0f !important;
+  border: 1px solid #303030 !important;
+  border-radius: 12px !important;
+  z-index: 999999 !important;
+  font-family: "Roboto", "Arial", sans-serif !important;
+  color: #f1f1f1 !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6) !important;
+  overflow: hidden !important;
+}
+
+.yt-clipper-header {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  padding: 14px 16px !important;
+  border-bottom: 1px solid #303030 !important;
+  background: #1a1a1a !important;
+}
+
+.yt-clipper-title {
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  color: #f1f1f1 !important;
+}
+
+.yt-clipper-close {
+  background: none !important;
+  border: none !important;
+  color: #aaa !important;
+  font-size: 22px !important;
+  cursor: pointer !important;
+  width: 28px !important;
+  height: 28px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 50% !important;
+  transition: all 0.2s !important;
+}
+
+.yt-clipper-close:hover {
+  background: #303030 !important;
+  color: #fff !important;
+}
+
+.yt-clipper-body {
+  padding: 16px !important;
+}
+
+.yt-clipper-field {
+  margin-bottom: 14px !important;
+}
+
+.yt-clipper-field label {
+  display: block !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: #aaa !important;
+  margin-bottom: 6px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+}
+
+.yt-clipper-field input[type="text"] {
+  width: 100% !important;
+  padding: 10px 12px !important;
+  background: #1a1a1a !important;
+  border: 1px solid #303030 !important;
+  border-radius: 8px !important;
+  color: #f1f1f1 !important;
+  font-size: 14px !important;
+  box-sizing: border-box !important;
+  outline: none !important;
+  transition: border-color 0.2s !important;
+}
+
+.yt-clipper-field input[type="text"]:focus {
+  border-color: #3ea6ff !important;
+}
+
+.yt-clipper-time-row {
+  display: flex !important;
+  gap: 12px !important;
+}
+
+.yt-clipper-time-row .yt-clipper-field {
+  flex: 1 !important;
+}
+
+.yt-clipper-time-input {
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+}
+
+.yt-clipper-time-input input {
+  width: 50px !important;
+  padding: 8px !important;
+  background: #1a1a1a !important;
+  border: 1px solid #303030 !important;
+  border-radius: 6px !important;
+  color: #f1f1f1 !important;
+  font-size: 14px !important;
+  text-align: center !important;
+  outline: none !important;
+}
+
+.yt-clipper-time-input input:focus {
+  border-color: #3ea6ff !important;
+}
+
+.yt-clipper-time-input span {
+  color: #666 !important;
+  font-weight: bold !important;
+}
+
+/* Slider */
+.yt-clipper-slider-container {
+  margin: 16px 0 !important;
+}
+
+.yt-clipper-slider-track {
+  position: relative !important;
+  height: 8px !important;
+  background: #303030 !important;
+  border-radius: 4px !important;
+  margin: 10px 0 !important;
+  cursor: pointer !important;
+}
+
+.yt-clipper-slider-range {
+  position: absolute !important;
+  height: 100% !important;
+  background: #3ea6ff !important;
+  border-radius: 4px !important;
+  top: 0 !important;
+}
+
+.yt-clipper-slider-handle {
+  position: absolute !important;
+  width: 16px !important;
+  height: 16px !important;
+  background: #fff !important;
+  border: 2px solid #3ea6ff !important;
+  border-radius: 50% !important;
+  top: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  cursor: grab !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4) !important;
+}
+
+.yt-clipper-slider-handle:active {
+  cursor: grabbing !important;
+  transform: translate(-50%, -50%) scale(1.2) !important;
+}
+
+.yt-clipper-slider-labels {
+  display: flex !important;
+  justify-content: space-between !important;
+  font-size: 11px !important;
+  color: #888 !important;
+  margin-top: 4px !important;
+}
+
+.yt-clipper-info {
+  text-align: center !important;
+  font-size: 13px !important;
+  color: #aaa !important;
+  margin: 10px 0 !important;
+  padding: 8px !important;
+  background: #1a1a1a !important;
+  border-radius: 6px !important;
+}
+
+.yt-clipper-actions {
+  display: flex !important;
+  gap: 8px !important;
+  margin-bottom: 12px !important;
+}
+
+.yt-clipper-btn {
+  padding: 10px 16px !important;
+  border-radius: 18px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  border: none !important;
+  transition: all 0.2s !important;
+  flex: 1 !important;
+}
+
+.yt-clipper-btn-primary {
+  width: 100% !important;
+  background: #3ea6ff !important;
+  color: #0f0f0f !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  padding: 12px !important;
+  margin-top: 4px !important;
+}
+
+.yt-clipper-btn-primary:hover:not(:disabled) {
+  background: #65b8ff !important;
+}
+
+.yt-clipper-btn-primary:disabled {
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
+}
+
+.yt-clipper-btn-secondary {
+  background: #272727 !important;
+  color: #f1f1f1 !important;
+  border: 1px solid #444 !important;
+}
+
+.yt-clipper-btn-secondary:hover {
+  background: #3f3f3f !important;
+}
+
+/* Progress */
+.yt-clipper-progress {
+  margin-top: 12px !important;
+}
+
+.yt-clipper-progress-bar {
+  width: 100% !important;
+  height: 6px !important;
+  background: #303030 !important;
+  border-radius: 3px !important;
+  overflow: hidden !important;
+}
+
+.yt-clipper-progress-fill {
+  height: 100% !important;
+  background: #3ea6ff !important;
+  width: 0% !important;
+  transition: width 0.3s ease !important;
+}
+
+#yt-clipper-progress-text {
+  display: block !important;
+  text-align: center !important;
+  font-size: 12px !important;
+  color: #aaa !important;
+  margin-top: 6px !important;
+}
+
+/* Status messages */
+.yt-clipper-status {
+  margin-top: 10px !important;
+  padding: 8px 12px !important;
+  border-radius: 6px !important;
+  font-size: 12px !important;
+  text-align: center !important;
+  display: none;
+}
+
+.yt-clipper-status-info {
+  display: block !important;
+  background: #1a3a5c !important;
+  color: #3ea6ff !important;
+}
+
+.yt-clipper-status-success {
+  display: block !important;
+  background: #1a3c1a !important;
+  color: #4caf50 !important;
+}
+
+.yt-clipper-status-error {
+  display: block !important;
+  background: #3c1a1a !important;
+  color: #ff6b6b !important;
+}
