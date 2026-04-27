@@ -9,7 +9,7 @@ let recorder = null;
 let recordingChunks = [];
 let rafId = null;
 let safetyTimeout = null;
-let stopRequested = false;  // NEW: separates "user wants to stop" from "is stopped"
+let stopRequested = false;
 
 // ============================================
 // YOUTUBE PLAYER UTILITIES
@@ -363,8 +363,8 @@ function cancelCapture() {
 
   console.log('[Clipper] User cancelled recording');
 
-  stopRequested = true;  // Signal we want to stop
-  isCapturing = false;   // Stop the draw loop and monitor
+  stopRequested = true;
+  isCapturing = false;
 
   if (rafId) {
     cancelAnimationFrame(rafId);
@@ -471,7 +471,6 @@ async function performRecording(video, startTime, endTime) {
 
   recordingChunks = [];
 
-  // CRITICAL FIX: onstop uses stopRequested to distinguish normal vs cancelled
   recorder.ondataavailable = (e) => {
     if (e.data && e.data.size > 0) {
       recordingChunks.push(e.data);
@@ -483,10 +482,8 @@ async function performRecording(video, startTime, endTime) {
     console.log('[Clipper] Recorder stopped. stopRequested:', stopRequested, 'chunks:', recordingChunks.length);
 
     if (!stopRequested) {
-      // Normal completion - finalize
       finalizeRecording();
     } else {
-      // Cancelled - discard
       recordingChunks = [];
       if (recorder && recorder.stream) {
         recorder.stream.getTracks().forEach(t => {
@@ -589,9 +586,7 @@ function stopRecording() {
 
   console.log('[Clipper] Stopping recording (normal completion)...');
 
-  // CRITICAL FIX: Don't set isCapturing = false here!
-  // Let onstop handle it. Just signal we want to stop.
-  stopRequested = false;  // This is a normal stop, not cancel
+  stopRequested = false;
 
   if (rafId) {
     cancelAnimationFrame(rafId);
@@ -616,7 +611,7 @@ function stopRecording() {
       console.log('[Clipper] Recorder.stop() called, state:', recorder.state);
     } catch (e) {
       console.warn('[Clipper] Error stopping recorder:', e);
-      isCapturing = false;  // Only set false if stop() throws
+      isCapturing = false;
       resetCaptureUI();
     }
   } else {
@@ -624,14 +619,12 @@ function stopRecording() {
     isCapturing = false;
     resetCaptureUI();
   }
-  // NOTE: isCapturing stays true here so onstop sees it and calls finalizeRecording
-  // finalizeRecording will call resetCaptureUI() which sets isCapturing = false
 }
 
 function finalizeRecording() {
   console.log('[Clipper] Finalizing recording, chunks:', recordingChunks.length);
 
-  isCapturing = false;  // Now we can set it false
+  isCapturing = false;
 
   // Stop all tracks
   if (recorder && recorder.stream) {
