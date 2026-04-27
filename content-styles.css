@@ -297,3 +297,41 @@
   background: #3c1a1a !important;
   color: #ff6b6b !important;
 }
+
+/* ============================================
+   CANCEL BUTTON STYLES
+   ============================================ */
+
+.yt-clipper-btn-danger {
+  width: 100% !important;
+  background: #cc0000 !important;
+  color: #ffffff !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  padding: 12px !important;
+  margin-top: 8px !important;
+  animation: yt-clipper-pulse 1.5s ease-in-out infinite !important;
+}
+
+.yt-clipper-btn-danger:hover {
+  background: #ff0000 !important;
+  animation: none !important;
+}
+
+@keyframes yt-clipper-pulse {
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(204, 0, 0, 0.4);
+  }
+
+  50% {
+    box-shadow: 0 0 0 8px rgba(204, 0, 0, 0);
+  }
+}
+
+/* Disabled state for capture button */
+.yt-clipper-btn-primary:disabled {
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
+}
