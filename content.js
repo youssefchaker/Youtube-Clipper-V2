@@ -10,6 +10,8 @@ let recordingChunks = [];
 let rafId = null;
 let safetyTimeout = null;
 let stopRequested = false;
+let audioContext = null;  // NEW: for Web Audio fallback
+let audioDestination = null;  // NEW: MediaStreamAudioDestinationNode
 
 // ============================================
 // YOUTUBE PLAYER UTILITIES
@@ -119,7 +121,7 @@ function createClipPanel() {
 
   const currentTime = getCurrentTime();
   const duration = getDuration();
-  const safeEnd = Math.min(currentTime + 60, duration);
+  const safeEnd = Math.min(currentTime + 30, duration);  // Default 30s preview
 
   panel.innerHTML = `
     <div class="yt-clipper-header">
@@ -149,7 +151,7 @@ function createClipPanel() {
       </div>
       
       <div class="yt-clipper-info" id="yt-clipper-info">
-        Duration: <span id="yt-clipper-dur-display">0:00</span>
+        Duration: <span id="yt-clipper-dur-display">0:00</span> <span style="color:#666;">(max 1:00)</span>
       </div>
       
       <div class="yt-clipper-actions">
@@ -250,7 +252,7 @@ function setTimeInput(prefix, totalSeconds) {
 function enforceMaxDuration() {
   const start = getTimeInput('start');
   let end = getTimeInput('end');
-  const maxEnd = start + 120;
+  const maxEnd = start + 60;  // CHANGED: 60 seconds (1 minute) max
 
   if (end > maxEnd) {
     end = maxEnd;
@@ -326,8 +328,8 @@ async function startCapture() {
     return;
   }
 
-  if (endTime - startTime > 120) {
-    showStatus('Clip cannot exceed 2 minutes', 'error');
+  if (endTime - startTime > 60) {  // CHANGED: 60 seconds max
+    showStatus('Clip cannot exceed 1 minute', 'error');
     return;
   }
 
@@ -338,7 +340,7 @@ async function startCapture() {
   }
 
   isCapturing = true;
-  stopRequested = false;  // Reset flag
+  stopRequested = false;
   clearStatus();
 
   const captureBtn = document.getElementById('yt-clipper-capture');
@@ -379,6 +381,15 @@ function cancelCapture() {
   if (safetyTimeout) {
     clearTimeout(safetyTimeout);
     safetyTimeout = null;
+  }
+
+  // Cleanup audio context
+  if (audioContext) {
+    try {
+      audioContext.close();
+    } catch (e) { }
+    audioContext = null;
+    audioDestination = null;
   }
 
   pauseVideo();
@@ -426,6 +437,13 @@ async function performRecording(video, startTime, endTime) {
   const canvasStream = canvas.captureStream(30);
   let combinedStream = canvasStream;
 
+  // ============================================
+  // AUDIO CAPTURE - Try multiple methods
+  // ============================================
+
+  let audioCaptured = false;
+
+  // Method 1: Try video.captureStream() (works on some non-DRM videos)
   try {
     if (video.captureStream) {
       const videoMediaStream = video.captureStream();
@@ -435,10 +453,40 @@ async function performRecording(video, startTime, endTime) {
           ...canvasStream.getVideoTracks(),
           ...audioTracks
         ]);
+        audioCaptured = true;
+        console.log('[Clipper] Audio captured via video.captureStream()');
       }
     }
   } catch (e) {
-    console.warn('[Clipper] Could not capture audio:', e);
+    console.warn('[Clipper] video.captureStream() failed:', e);
+  }
+
+  // Method 2: Web Audio API fallback (works for most YouTube videos)
+  if (!audioCaptured) {
+    try {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      audioDestination = audioContext.createMediaStreamDestination();
+
+      const source = audioContext.createMediaElementSource(video);
+      source.connect(audioDestination);
+      source.connect(audioContext.destination);  // Keep normal audio output too
+
+      const audioTracks = audioDestination.stream.getAudioTracks();
+      if (audioTracks.length > 0) {
+        combinedStream = new MediaStream([
+          ...canvasStream.getVideoTracks(),
+          ...audioTracks
+        ]);
+        audioCaptured = true;
+        console.log('[Clipper] Audio captured via Web Audio API');
+      }
+    } catch (e) {
+      console.warn('[Clipper] Web Audio API failed:', e);
+    }
+  }
+
+  if (!audioCaptured) {
+    console.warn('[Clipper] No audio could be captured - video-only clip');
   }
 
   // Determine mime type
@@ -462,7 +510,7 @@ async function performRecording(video, startTime, endTime) {
     throw new Error('No supported MediaRecorder mimeType found');
   }
 
-  console.log('[Clipper] Using mimeType:', selectedMimeType);
+  console.log('[Clipper] Using mimeType:', selectedMimeType, 'Audio:', audioCaptured);
 
   recorder = new MediaRecorder(combinedStream, {
     mimeType: selectedMimeType,
@@ -480,6 +528,15 @@ async function performRecording(video, startTime, endTime) {
 
   recorder.onstop = () => {
     console.log('[Clipper] Recorder stopped. stopRequested:', stopRequested, 'chunks:', recordingChunks.length);
+
+    // Cleanup audio context
+    if (audioContext) {
+      try {
+        audioContext.close();
+      } catch (e) { }
+      audioContext = null;
+      audioDestination = null;
+    }
 
     if (!stopRequested) {
       finalizeRecording();
@@ -507,6 +564,11 @@ async function performRecording(video, startTime, endTime) {
   await new Promise(r => setTimeout(r, 200));
   seekTo(startTime);
   await waitForVideoReady(video);
+
+  // Resume audio context if suspended (browser policy)
+  if (audioContext && audioContext.state === 'suspended') {
+    await audioContext.resume();
+  }
 
   // Start recording
   recorder.start(1000);
