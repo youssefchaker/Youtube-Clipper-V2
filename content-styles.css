@@ -2,7 +2,6 @@
    YOUTUBE CLIPPER - CONTENT STYLES
    ============================================ */
 
-/* Clip Button */
 #yt-clipper-btn {
   display: inline-flex !important;
   align-items: center !important;
@@ -16,12 +15,12 @@
   height: 24px;
 }
 
-/* Clip Panel */
 #yt-clipper-panel {
   position: fixed !important;
   top: 80px !important;
   right: 20px !important;
-  width: 340px !important;
+  width: 360px !important;
+  /* was 280px */
   background: #0f0f0f !important;
   border: 1px solid #303030 !important;
   border-radius: 12px !important;
@@ -85,48 +84,39 @@
   letter-spacing: 0.5px !important;
 }
 
-.yt-clipper-field input[type="text"] {
-  width: 100% !important;
-  padding: 10px 12px !important;
-  background: #1a1a1a !important;
-  border: 1px solid #303030 !important;
-  border-radius: 8px !important;
-  color: #f1f1f1 !important;
-  font-size: 14px !important;
-  box-sizing: border-box !important;
-  outline: none !important;
-  transition: border-color 0.2s !important;
-}
-
-.yt-clipper-field input[type="text"]:focus {
-  border-color: #3ea6ff !important;
-}
-
 .yt-clipper-time-row {
   display: flex !important;
-  gap: 12px !important;
+  gap: 16px !important;
+  /* was 12px */
 }
 
 .yt-clipper-time-row .yt-clipper-field {
   flex: 1 !important;
+  min-width: 0 !important;
+  /* prevent flex overflow */
 }
 
 .yt-clipper-time-input {
   display: flex !important;
   align-items: center !important;
-  gap: 4px !important;
+  gap: 6px !important;
+  /* was 4px */
 }
 
 .yt-clipper-time-input input {
-  width: 50px !important;
-  padding: 8px !important;
+  width: 56px !important;
+  /* was 50px */
+  padding: 10px 4px !important;
+  /* more vertical padding */
   background: #1a1a1a !important;
   border: 1px solid #303030 !important;
   border-radius: 6px !important;
   color: #f1f1f1 !important;
-  font-size: 14px !important;
+  font-size: 15px !important;
+  /* was 14px */
   text-align: center !important;
   outline: none !important;
+  flex-shrink: 0 !important;
 }
 
 .yt-clipper-time-input input:focus {
@@ -136,54 +126,8 @@
 .yt-clipper-time-input span {
   color: #666 !important;
   font-weight: bold !important;
-}
-
-/* Slider */
-.yt-clipper-slider-container {
-  margin: 16px 0 !important;
-}
-
-.yt-clipper-slider-track {
-  position: relative !important;
-  height: 8px !important;
-  background: #303030 !important;
-  border-radius: 4px !important;
-  margin: 10px 0 !important;
-  cursor: pointer !important;
-}
-
-.yt-clipper-slider-range {
-  position: absolute !important;
-  height: 100% !important;
-  background: #3ea6ff !important;
-  border-radius: 4px !important;
-  top: 0 !important;
-}
-
-.yt-clipper-slider-handle {
-  position: absolute !important;
-  width: 16px !important;
-  height: 16px !important;
-  background: #fff !important;
-  border: 2px solid #3ea6ff !important;
-  border-radius: 50% !important;
-  top: 50% !important;
-  transform: translate(-50%, -50%) !important;
-  cursor: grab !important;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4) !important;
-}
-
-.yt-clipper-slider-handle:active {
-  cursor: grabbing !important;
-  transform: translate(-50%, -50%) scale(1.2) !important;
-}
-
-.yt-clipper-slider-labels {
-  display: flex !important;
-  justify-content: space-between !important;
-  font-size: 11px !important;
-  color: #888 !important;
-  margin-top: 4px !important;
+  font-size: 14px !important;
+  flex-shrink: 0 !important;
 }
 
 .yt-clipper-info {
@@ -242,66 +186,6 @@
   background: #3f3f3f !important;
 }
 
-/* Progress */
-.yt-clipper-progress {
-  margin-top: 12px !important;
-}
-
-.yt-clipper-progress-bar {
-  width: 100% !important;
-  height: 6px !important;
-  background: #303030 !important;
-  border-radius: 3px !important;
-  overflow: hidden !important;
-}
-
-.yt-clipper-progress-fill {
-  height: 100% !important;
-  background: #3ea6ff !important;
-  width: 0% !important;
-  transition: width 0.3s ease !important;
-}
-
-#yt-clipper-progress-text {
-  display: block !important;
-  text-align: center !important;
-  font-size: 12px !important;
-  color: #aaa !important;
-  margin-top: 6px !important;
-}
-
-/* Status messages */
-.yt-clipper-status {
-  margin-top: 10px !important;
-  padding: 8px 12px !important;
-  border-radius: 6px !important;
-  font-size: 12px !important;
-  text-align: center !important;
-  display: none;
-}
-
-.yt-clipper-status-info {
-  display: block !important;
-  background: #1a3a5c !important;
-  color: #3ea6ff !important;
-}
-
-.yt-clipper-status-success {
-  display: block !important;
-  background: #1a3c1a !important;
-  color: #4caf50 !important;
-}
-
-.yt-clipper-status-error {
-  display: block !important;
-  background: #3c1a1a !important;
-  color: #ff6b6b !important;
-}
-
-/* ============================================
-   CANCEL BUTTON STYLES
-   ============================================ */
-
 .yt-clipper-btn-danger {
   width: 100% !important;
   background: #cc0000 !important;
@@ -330,8 +214,56 @@
   }
 }
 
-/* Disabled state for capture button */
-.yt-clipper-btn-primary:disabled {
-  opacity: 0.5 !important;
-  cursor: not-allowed !important;
+.yt-clipper-progress {
+  margin-top: 12px !important;
+}
+
+.yt-clipper-progress-bar {
+  width: 100% !important;
+  height: 6px !important;
+  background: #303030 !important;
+  border-radius: 3px !important;
+  overflow: hidden !important;
+}
+
+.yt-clipper-progress-fill {
+  height: 100% !important;
+  background: #3ea6ff !important;
+  width: 0% !important;
+  transition: width 0.3s ease !important;
+}
+
+#yt-clipper-progress-text {
+  display: block !important;
+  text-align: center !important;
+  font-size: 12px !important;
+  color: #aaa !important;
+  margin-top: 6px !important;
+}
+
+.yt-clipper-status {
+  margin-top: 10px !important;
+  padding: 8px 12px !important;
+  border-radius: 6px !important;
+  font-size: 12px !important;
+  text-align: center !important;
+  display: none;
+}
+
+.yt-clipper-status-info {
+  display: block !important;
+  background: #1a3a5c !important;
+  color: #3ea6ff !important;
+}
+
+.yt-clipper-status-success {
+  display: block !important;
+  background: #1a3c1a !important;
+  color: #4caf50 !important;
+}
+
+.yt-clipper-status-error {
+  display: block !important;
+  background: #3c1a1a !important;
+  color: #ff6b6b !important;
 }

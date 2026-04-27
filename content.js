@@ -1,7 +1,5 @@
 // ============================================
 // CONTENT SCRIPT - youtube.com
-// Injects Clip button, manages panel UI,
-// controls YouTube player, RECORDS directly via canvas
 // ============================================
 
 let clipPanel = null;
@@ -10,6 +8,8 @@ let captureMonitor = null;
 let recorder = null;
 let recordingChunks = [];
 let rafId = null;
+let safetyTimeout = null;
+let stopRequested = false;  // NEW: separates "user wants to stop" from "is stopped"
 
 // ============================================
 // YOUTUBE PLAYER UTILITIES
@@ -128,11 +128,6 @@ function createClipPanel() {
     </div>
     
     <div class="yt-clipper-body">
-      <div class="yt-clipper-field">
-        <label>Clip Name</label>
-        <input type="text" id="yt-clipper-name" placeholder="My awesome clip" value="${getVideoTitle().substring(0, 50)}_clip">
-      </div>
-      
       <div class="yt-clipper-time-row">
         <div class="yt-clipper-field">
           <label>Start</label>
@@ -153,27 +148,13 @@ function createClipPanel() {
         </div>
       </div>
       
-      <div class="yt-clipper-slider-container">
-        <label>Quick Select (2 min max)</label>
-        <div class="yt-clipper-slider-track">
-          <div class="yt-clipper-slider-range" id="yt-clipper-range"></div>
-          <div class="yt-clipper-slider-handle yt-clipper-handle-start" id="yt-clipper-handle-start"></div>
-          <div class="yt-clipper-slider-handle yt-clipper-handle-end" id="yt-clipper-handle-end"></div>
-        </div>
-        <div class="yt-clipper-slider-labels">
-          <span id="yt-clipper-label-start">0:00</span>
-          <span id="yt-clipper-duration">2:00 max</span>
-          <span id="yt-clipper-label-end">0:00</span>
-        </div>
-      </div>
-      
       <div class="yt-clipper-info" id="yt-clipper-info">
         Duration: <span id="yt-clipper-dur-display">0:00</span>
       </div>
       
       <div class="yt-clipper-actions">
-        <button class="yt-clipper-btn yt-clipper-btn-secondary" id="yt-clipper-set-start">Set Start (Current)</button>
-        <button class="yt-clipper-btn yt-clipper-btn-secondary" id="yt-clipper-set-end">Set End (Current)</button>
+        <button class="yt-clipper-btn yt-clipper-btn-secondary" id="yt-clipper-set-start">Set Start</button>
+        <button class="yt-clipper-btn yt-clipper-btn-secondary" id="yt-clipper-set-end">Set End</button>
       </div>
       
       <button class="yt-clipper-btn yt-clipper-btn-primary" id="yt-clipper-capture">
@@ -199,58 +180,58 @@ function createClipPanel() {
   clipPanel = panel;
 
   setupPanelEvents();
-  updateSliderFromInputs();
+  updateDurationDisplay();
 }
 
 function setupPanelEvents() {
-  document.getElementById('yt-clipper-close').addEventListener('click', () => {
-    if (isCapturing) {
-      cancelCapture();
-    }
-    closeClipPanel();
-  });
+  const closeBtn = document.getElementById('yt-clipper-close');
+  const setStartBtn = document.getElementById('yt-clipper-set-start');
+  const setEndBtn = document.getElementById('yt-clipper-set-end');
+  const captureBtn = document.getElementById('yt-clipper-capture');
+  const cancelBtn = document.getElementById('yt-clipper-cancel');
 
-  document.getElementById('yt-clipper-set-start').addEventListener('click', () => {
-    const t = getCurrentTime();
-    setTimeInput('start', t);
-    updateSliderFromInputs();
-  });
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => {
+      if (isCapturing) cancelCapture();
+      closeClipPanel();
+    });
+  }
 
-  document.getElementById('yt-clipper-set-end').addEventListener('click', () => {
-    const t = getCurrentTime();
-    setTimeInput('end', t);
-    updateSliderFromInputs();
-  });
+  if (setStartBtn) {
+    setStartBtn.addEventListener('click', () => {
+      const t = getCurrentTime();
+      setTimeInput('start', t);
+      enforceMaxDuration();
+      updateDurationDisplay();
+    });
+  }
+
+  if (setEndBtn) {
+    setEndBtn.addEventListener('click', () => {
+      const t = getCurrentTime();
+      setTimeInput('end', t);
+      enforceMaxDuration();
+      updateDurationDisplay();
+    });
+  }
 
   ['start-m', 'start-s', 'end-m', 'end-s'].forEach(id => {
-    document.getElementById(`yt-clipper-${id}`).addEventListener('input', () => {
-      enforceMaxDuration();
-      updateSliderFromInputs();
-    });
-  });
-
-  document.getElementById('yt-clipper-capture').addEventListener('click', startCapture);
-  document.getElementById('yt-clipper-cancel').addEventListener('click', cancelCapture);
-
-  const track = document.querySelector('.yt-clipper-slider-track');
-  track.addEventListener('click', (e) => {
-    const rect = track.getBoundingClientRect();
-    const pct = (e.clientX - rect.left) / rect.width;
-    const duration = getDuration();
-    const clickTime = pct * duration;
-
-    const startTime = getTimeInput('start');
-    const endTime = getTimeInput('end');
-    const midPoint = (startTime + endTime) / 2;
-
-    if (clickTime < midPoint) {
-      setTimeInput('start', Math.max(0, clickTime));
-    } else {
-      setTimeInput('end', Math.min(duration, clickTime));
+    const el = document.getElementById(`yt-clipper-${id}`);
+    if (el) {
+      el.addEventListener('input', () => {
+        enforceMaxDuration();
+        updateDurationDisplay();
+      });
     }
-    enforceMaxDuration();
-    updateSliderFromInputs();
   });
+
+  if (captureBtn) {
+    captureBtn.addEventListener('click', startCapture);
+  }
+
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', cancelCapture);
+  }
 }
 
 function getTimeInput(prefix) {
@@ -286,23 +267,11 @@ function enforceMaxDuration() {
   }
 }
 
-function updateSliderFromInputs() {
+function updateDurationDisplay() {
   const start = getTimeInput('start');
   const end = getTimeInput('end');
-  const duration = getDuration() || 1;
-
-  const startPct = (start / duration) * 100;
-  const endPct = (end / duration) * 100;
-
-  document.getElementById('yt-clipper-range').style.left = startPct + '%';
-  document.getElementById('yt-clipper-range').style.width = (endPct - startPct) + '%';
-  document.getElementById('yt-clipper-handle-start').style.left = startPct + '%';
-  document.getElementById('yt-clipper-handle-end').style.left = endPct + '%';
-
-  document.getElementById('yt-clipper-label-start').textContent = formatTime(start);
-  document.getElementById('yt-clipper-label-end').textContent = formatTime(end);
-
-  document.getElementById('yt-clipper-dur-display').textContent = formatTime(end - start);
+  const el = document.getElementById('yt-clipper-dur-display');
+  if (el) el.textContent = formatTime(end - start);
 }
 
 function formatTime(seconds) {
@@ -331,16 +300,24 @@ function showStatus(msg, type = 'info') {
   if (!el) return;
   el.textContent = msg;
   el.className = `yt-clipper-status yt-clipper-status-${type}`;
+  el.style.display = 'block';
+}
+
+function clearStatus() {
+  const el = document.getElementById('yt-clipper-status');
+  if (el) {
+    el.textContent = '';
+    el.style.display = 'none';
+  }
 }
 
 // ============================================
-// CAPTURE LOGIC - Canvas + MediaRecorder
+// CAPTURE LOGIC
 // ============================================
 
 async function startCapture() {
   if (isCapturing) return;
 
-  const name = document.getElementById('yt-clipper-name').value.trim() || 'clip';
   const startTime = getTimeInput('start');
   const endTime = getTimeInput('end');
 
@@ -361,16 +338,21 @@ async function startCapture() {
   }
 
   isCapturing = true;
-  showStatus('Preparing capture...', 'info');
+  stopRequested = false;  // Reset flag
+  clearStatus();
 
-  // Switch buttons: hide Capture, show Cancel
-  document.getElementById('yt-clipper-capture').style.display = 'none';
-  document.getElementById('yt-clipper-cancel').style.display = 'block';
-  document.getElementById('yt-clipper-progress').style.display = 'block';
+  const captureBtn = document.getElementById('yt-clipper-capture');
+  const cancelBtn = document.getElementById('yt-clipper-cancel');
+  const progress = document.getElementById('yt-clipper-progress');
+
+  if (captureBtn) captureBtn.style.display = 'none';
+  if (cancelBtn) cancelBtn.style.display = 'block';
+  if (progress) progress.style.display = 'block';
 
   try {
-    await performRecording(video, startTime, endTime, name);
+    await performRecording(video, startTime, endTime);
   } catch (err) {
+    console.error('[Clipper] Capture error:', err);
     showStatus('Recording failed: ' + err.message, 'error');
     resetCaptureUI();
   }
@@ -381,8 +363,8 @@ function cancelCapture() {
 
   console.log('[Clipper] User cancelled recording');
 
-  // Stop everything immediately
-  isCapturing = false;
+  stopRequested = true;  // Signal we want to stop
+  isCapturing = false;   // Stop the draw loop and monitor
 
   if (rafId) {
     cancelAnimationFrame(rafId);
@@ -394,35 +376,42 @@ function cancelCapture() {
     captureMonitor = null;
   }
 
+  if (safetyTimeout) {
+    clearTimeout(safetyTimeout);
+    safetyTimeout = null;
+  }
+
   pauseVideo();
 
   if (recorder) {
-    if (recorder.state !== 'inactive') {
-      try {
+    try {
+      if (recorder.state !== 'inactive') {
         recorder.stop();
-      } catch (e) {
-        // Ignore stop errors on cancel
       }
+    } catch (e) {
+      console.warn('[Clipper] Error stopping recorder:', e);
     }
-    // Stop all tracks to release camera/mic resources
-    if (recorder.stream) {
-      recorder.stream.getTracks().forEach(t => {
-        try { t.stop(); } catch (e) { }
-      });
+
+    try {
+      if (recorder.stream) {
+        recorder.stream.getTracks().forEach(t => t.stop());
+      }
+    } catch (e) {
+      console.warn('[Clipper] Error stopping tracks:', e);
     }
+
     recorder = null;
   }
 
   recordingChunks = [];
-
   showStatus('Recording cancelled', 'info');
   resetCaptureUI();
 }
 
-async function performRecording(video, startTime, endTime, filename) {
+async function performRecording(video, startTime, endTime) {
   const duration = endTime - startTime;
 
-  // 1. Create canvas at video resolution (capped)
+  // Setup canvas
   const maxWidth = 1920;
   const scale = video.videoWidth > maxWidth ? maxWidth / video.videoWidth : 1;
   const canvasWidth = Math.floor(video.videoWidth * scale) || 1280;
@@ -433,11 +422,10 @@ async function performRecording(video, startTime, endTime, filename) {
   canvas.height = canvasHeight;
   const ctx = canvas.getContext('2d', { alpha: false });
 
-  // 2. Setup MediaRecorder from canvas stream
+  // Setup streams
   const canvasStream = canvas.captureStream(30);
-
-  // 3. Try to capture audio from the video element
   let combinedStream = canvasStream;
+
   try {
     if (video.captureStream) {
       const videoMediaStream = video.captureStream();
@@ -447,16 +435,13 @@ async function performRecording(video, startTime, endTime, filename) {
           ...canvasStream.getVideoTracks(),
           ...audioTracks
         ]);
-        console.log('[Clipper] Audio track captured');
-      } else {
-        console.log('[Clipper] No audio track available');
       }
     }
   } catch (e) {
     console.warn('[Clipper] Could not capture audio:', e);
   }
 
-  // 4. Determine supported mime type
+  // Determine mime type
   const mimeTypes = [
     'video/webm;codecs=vp9,opus',
     'video/webm;codecs=vp8,opus',
@@ -474,7 +459,7 @@ async function performRecording(video, startTime, endTime, filename) {
   }
 
   if (!selectedMimeType) {
-    throw new Error('No supported MediaRecorder mimeType found in this browser');
+    throw new Error('No supported MediaRecorder mimeType found');
   }
 
   console.log('[Clipper] Using mimeType:', selectedMimeType);
@@ -486,18 +471,22 @@ async function performRecording(video, startTime, endTime, filename) {
 
   recordingChunks = [];
 
+  // CRITICAL FIX: onstop uses stopRequested to distinguish normal vs cancelled
   recorder.ondataavailable = (e) => {
     if (e.data && e.data.size > 0) {
       recordingChunks.push(e.data);
+      console.log('[Clipper] Data chunk received:', e.data.size, 'bytes');
     }
   };
 
   recorder.onstop = () => {
-    // Only finalize if we weren't cancelled (isCapturing would be false on cancel)
-    if (isCapturing) {
-      finalizeRecording(filename);
+    console.log('[Clipper] Recorder stopped. stopRequested:', stopRequested, 'chunks:', recordingChunks.length);
+
+    if (!stopRequested) {
+      // Normal completion - finalize
+      finalizeRecording();
     } else {
-      // Cancelled — discard chunks
+      // Cancelled - discard
       recordingChunks = [];
       if (recorder && recorder.stream) {
         recorder.stream.getTracks().forEach(t => {
@@ -509,25 +498,27 @@ async function performRecording(video, startTime, endTime, filename) {
   };
 
   recorder.onerror = (e) => {
-    if (isCapturing) {
+    console.error('[Clipper] Recorder error:', e);
+    if (isCapturing && !stopRequested) {
       showStatus('Recorder error: ' + e.message, 'error');
       resetCaptureUI();
     }
   };
 
-  // 5. Seek to start and wait
+  // Seek to start
   pauseVideo();
   await new Promise(r => setTimeout(r, 200));
   seekTo(startTime);
   await waitForVideoReady(video);
 
-  // 6. Start recording
+  // Start recording
   recorder.start(1000);
+  console.log('[Clipper] Recorder started, state:', recorder.state);
 
-  // 7. Play video
+  // Start playing
   playVideo();
 
-  // 8. Frame draw loop
+  // Frame draw loop
   const drawFrame = () => {
     if (!isCapturing) return;
     try {
@@ -539,7 +530,7 @@ async function performRecording(video, startTime, endTime, filename) {
   };
   drawFrame();
 
-  // 9. Monitor progress
+  // Progress monitoring
   const totalDuration = endTime - startTime;
   const progressFill = document.getElementById('yt-clipper-progress-fill');
   const progressText = document.getElementById('yt-clipper-progress-text');
@@ -551,38 +542,56 @@ async function performRecording(video, startTime, endTime, filename) {
     const elapsed = current - startTime;
     const pct = Math.min(100, (elapsed / totalDuration) * 100);
 
-    progressFill.style.width = pct + '%';
-    progressText.textContent = `Recording... ${Math.floor(pct)}% (${formatTime(elapsed)} / ${formatTime(totalDuration)})`;
+    if (progressFill) progressFill.style.width = pct + '%';
+    if (progressText) {
+      progressText.textContent = `Recording... ${Math.floor(pct)}% (${formatTime(elapsed)} / ${formatTime(totalDuration)})`;
+    }
 
     if (current >= endTime || pct >= 100) {
       stopRecording();
     }
   }, 250);
 
-  // 10. Safety timeout
-  setTimeout(() => {
+  // Safety timeout
+  safetyTimeout = setTimeout(() => {
     if (isCapturing) {
       console.warn('[Clipper] Safety timeout triggered');
       stopRecording();
     }
-  }, (duration + 10) * 1000);
+  }, (duration + 15) * 1000);
 }
 
 function waitForVideoReady(video) {
   return new Promise((resolve) => {
+    let resolved = false;
+
     const onSeeked = () => {
+      if (resolved) return;
+      resolved = true;
       video.removeEventListener('seeked', onSeeked);
       resolve();
     };
+
     video.addEventListener('seeked', onSeeked);
-    setTimeout(resolve, 800);
+
+    setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        video.removeEventListener('seeked', onSeeked);
+        resolve();
+      }
+    }, 1000);
   });
 }
 
 function stopRecording() {
   if (!isCapturing) return;
 
-  isCapturing = false;
+  console.log('[Clipper] Stopping recording (normal completion)...');
+
+  // CRITICAL FIX: Don't set isCapturing = false here!
+  // Let onstop handle it. Just signal we want to stop.
+  stopRequested = false;  // This is a normal stop, not cancel
 
   if (rafId) {
     cancelAnimationFrame(rafId);
@@ -594,14 +603,36 @@ function stopRecording() {
     captureMonitor = null;
   }
 
+  if (safetyTimeout) {
+    clearTimeout(safetyTimeout);
+    safetyTimeout = null;
+  }
+
   pauseVideo();
 
   if (recorder && recorder.state !== 'inactive') {
-    recorder.stop();
+    try {
+      recorder.stop();
+      console.log('[Clipper] Recorder.stop() called, state:', recorder.state);
+    } catch (e) {
+      console.warn('[Clipper] Error stopping recorder:', e);
+      isCapturing = false;  // Only set false if stop() throws
+      resetCaptureUI();
+    }
+  } else {
+    console.log('[Clipper] Recorder already inactive');
+    isCapturing = false;
+    resetCaptureUI();
   }
+  // NOTE: isCapturing stays true here so onstop sees it and calls finalizeRecording
+  // finalizeRecording will call resetCaptureUI() which sets isCapturing = false
 }
 
-function finalizeRecording(filename) {
+function finalizeRecording() {
+  console.log('[Clipper] Finalizing recording, chunks:', recordingChunks.length);
+
+  isCapturing = false;  // Now we can set it false
+
   // Stop all tracks
   if (recorder && recorder.stream) {
     recorder.stream.getTracks().forEach(t => {
@@ -617,6 +648,9 @@ function finalizeRecording(filename) {
 
   const blob = new Blob(recordingChunks, { type: recorder.mimeType });
   const blobUrl = URL.createObjectURL(blob);
+  console.log('[Clipper] Blob created:', blob.size, 'bytes');
+
+  const filename = getVideoTitle().substring(0, 50).replace(/[^a-zA-Z0-9_-]/g, '_');
 
   chrome.runtime.sendMessage({
     action: 'DOWNLOAD_CLIP',
@@ -624,9 +658,10 @@ function finalizeRecording(filename) {
     filename: filename
   }, (response) => {
     if (chrome.runtime.lastError) {
+      console.error('[Clipper] Download error:', chrome.runtime.lastError);
       showStatus('Download error: ' + chrome.runtime.lastError.message, 'error');
     } else {
-      showStatus('Clip saved! Check your downloads.', 'success');
+      showStatus('Clip saved!', 'success');
     }
     resetCaptureUI();
   });
@@ -637,10 +672,13 @@ function finalizeRecording(filename) {
 
 function resetCaptureUI() {
   isCapturing = false;
+  stopRequested = false;
 
   const captureBtn = document.getElementById('yt-clipper-capture');
   const cancelBtn = document.getElementById('yt-clipper-cancel');
   const progress = document.getElementById('yt-clipper-progress');
+  const progressFill = document.getElementById('yt-clipper-progress-fill');
+  const progressText = document.getElementById('yt-clipper-progress-text');
 
   if (captureBtn) {
     captureBtn.style.display = 'block';
@@ -648,10 +686,12 @@ function resetCaptureUI() {
   }
   if (cancelBtn) cancelBtn.style.display = 'none';
   if (progress) progress.style.display = 'none';
+  if (progressFill) progressFill.style.width = '0%';
+  if (progressText) progressText.textContent = 'Recording... 0%';
 }
 
 // ============================================
-// LISTEN FOR BACKGROUND MESSAGES
+// MESSAGE HANDLING
 // ============================================
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
