@@ -267,3 +267,13 @@
   background: #3c1a1a !important;
   color: #ff6b6b !important;
 }
+
+.yt-clipper-btn-primary:disabled {
+  opacity: 0.6 !important;
+  cursor: wait !important;
+}
+
+.yt-clipper-progress-text-converting {
+  color: #3ea6ff !important;
+  font-weight: 500 !important;
+}

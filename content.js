@@ -1,5 +1,6 @@
 // ============================================
 // CONTENT SCRIPT - youtube.com
+// Simplified: tries MP4 directly, falls back to WebM
 // ============================================
 
 let clipPanel = null;
@@ -10,8 +11,8 @@ let recordingChunks = [];
 let rafId = null;
 let safetyTimeout = null;
 let stopRequested = false;
-let audioContext = null;  // NEW: for Web Audio fallback
-let audioDestination = null;  // NEW: MediaStreamAudioDestinationNode
+let audioContext = null;
+let audioDestination = null;
 
 // ============================================
 // YOUTUBE PLAYER UTILITIES
@@ -121,7 +122,7 @@ function createClipPanel() {
 
   const currentTime = getCurrentTime();
   const duration = getDuration();
-  const safeEnd = Math.min(currentTime + 30, duration);  // Default 30s preview
+  const safeEnd = Math.min(currentTime + 30, duration);
 
   panel.innerHTML = `
     <div class="yt-clipper-header">
@@ -252,7 +253,7 @@ function setTimeInput(prefix, totalSeconds) {
 function enforceMaxDuration() {
   const start = getTimeInput('start');
   let end = getTimeInput('end');
-  const maxEnd = start + 60;  // CHANGED: 60 seconds (1 minute) max
+  const maxEnd = start + 60;
 
   if (end > maxEnd) {
     end = maxEnd;
@@ -328,7 +329,7 @@ async function startCapture() {
     return;
   }
 
-  if (endTime - startTime > 60) {  // CHANGED: 60 seconds max
+  if (endTime - startTime > 60) {
     showStatus('Clip cannot exceed 1 minute', 'error');
     return;
   }
@@ -383,11 +384,8 @@ function cancelCapture() {
     safetyTimeout = null;
   }
 
-  // Cleanup audio context
   if (audioContext) {
-    try {
-      audioContext.close();
-    } catch (e) { }
+    try { audioContext.close(); } catch (e) { }
     audioContext = null;
     audioDestination = null;
   }
@@ -437,13 +435,9 @@ async function performRecording(video, startTime, endTime) {
   const canvasStream = canvas.captureStream(30);
   let combinedStream = canvasStream;
 
-  // ============================================
-  // AUDIO CAPTURE - Try multiple methods
-  // ============================================
-
+  // Audio capture
   let audioCaptured = false;
 
-  // Method 1: Try video.captureStream() (works on some non-DRM videos)
   try {
     if (video.captureStream) {
       const videoMediaStream = video.captureStream();
@@ -461,7 +455,6 @@ async function performRecording(video, startTime, endTime) {
     console.warn('[Clipper] video.captureStream() failed:', e);
   }
 
-  // Method 2: Web Audio API fallback (works for most YouTube videos)
   if (!audioCaptured) {
     try {
       audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -469,7 +462,7 @@ async function performRecording(video, startTime, endTime) {
 
       const source = audioContext.createMediaElementSource(video);
       source.connect(audioDestination);
-      source.connect(audioContext.destination);  // Keep normal audio output too
+      source.connect(audioContext.destination);
 
       const audioTracks = audioDestination.stream.getAudioTracks();
       if (audioTracks.length > 0) {
@@ -485,32 +478,54 @@ async function performRecording(video, startTime, endTime) {
     }
   }
 
-  if (!audioCaptured) {
-    console.warn('[Clipper] No audio could be captured - video-only clip');
-  }
+  // ============================================
+  // TRY MP4 FIRST, FALL BACK TO WEBM
+  // ============================================
 
-  // Determine mime type
-  const mimeTypes = [
-    'video/webm;codecs=vp9,opus',
-    'video/webm;codecs=vp8,opus',
-    'video/webm;codecs=h264,opus',
-    'video/webm',
+  // Check if browser supports MP4 recording (Chrome on macOS/Windows sometimes does)
+  const mp4MimeTypes = [
+    'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+    'video/mp4;codecs=h264,aac',
     'video/mp4'
   ];
 
+  const webmMimeTypes = [
+    'video/webm;codecs=vp9,opus',
+    'video/webm;codecs=vp8,opus',
+    'video/webm'
+  ];
+
   let selectedMimeType = '';
-  for (const type of mimeTypes) {
+  let outputExtension = 'webm';
+  let isMp4 = false;
+
+  // Try MP4 first
+  for (const type of mp4MimeTypes) {
     if (MediaRecorder.isTypeSupported(type)) {
       selectedMimeType = type;
+      outputExtension = 'mp4';
+      isMp4 = true;
+      console.log('[Clipper] Using native MP4 recording:', type);
       break;
+    }
+  }
+
+  // Fall back to WebM
+  if (!selectedMimeType) {
+    for (const type of webmMimeTypes) {
+      if (MediaRecorder.isTypeSupported(type)) {
+        selectedMimeType = type;
+        outputExtension = 'webm';
+        isMp4 = false;
+        console.log('[Clipper] Using WebM recording:', type);
+        break;
+      }
     }
   }
 
   if (!selectedMimeType) {
     throw new Error('No supported MediaRecorder mimeType found');
   }
-
-  console.log('[Clipper] Using mimeType:', selectedMimeType, 'Audio:', audioCaptured);
 
   recorder = new MediaRecorder(combinedStream, {
     mimeType: selectedMimeType,
@@ -529,17 +544,14 @@ async function performRecording(video, startTime, endTime) {
   recorder.onstop = () => {
     console.log('[Clipper] Recorder stopped. stopRequested:', stopRequested, 'chunks:', recordingChunks.length);
 
-    // Cleanup audio context
     if (audioContext) {
-      try {
-        audioContext.close();
-      } catch (e) { }
+      try { audioContext.close(); } catch (e) { }
       audioContext = null;
       audioDestination = null;
     }
 
     if (!stopRequested) {
-      finalizeRecording();
+      finalizeRecording(outputExtension);
     } else {
       recordingChunks = [];
       if (recorder && recorder.stream) {
@@ -565,7 +577,6 @@ async function performRecording(video, startTime, endTime) {
   seekTo(startTime);
   await waitForVideoReady(video);
 
-  // Resume audio context if suspended (browser policy)
   if (audioContext && audioContext.state === 'suspended') {
     await audioContext.resume();
   }
@@ -683,12 +694,11 @@ function stopRecording() {
   }
 }
 
-function finalizeRecording() {
-  console.log('[Clipper] Finalizing recording, chunks:', recordingChunks.length);
+function finalizeRecording(extension) {
+  console.log('[Clipper] Finalizing recording, chunks:', recordingChunks.length, 'extension:', extension);
 
   isCapturing = false;
 
-  // Stop all tracks
   if (recorder && recorder.stream) {
     recorder.stream.getTracks().forEach(t => {
       try { t.stop(); } catch (e) { }
@@ -707,16 +717,22 @@ function finalizeRecording() {
 
   const filename = getVideoTitle().substring(0, 50).replace(/[^a-zA-Z0-9_-]/g, '_');
 
+  // Show format info
+  if (extension === 'webm') {
+    showStatus('Saved as WebM. Use a converter for Messenger.', 'info');
+  }
+
   chrome.runtime.sendMessage({
     action: 'DOWNLOAD_CLIP',
     blobUrl: blobUrl,
-    filename: filename
+    filename: filename,
+    extension: extension
   }, (response) => {
     if (chrome.runtime.lastError) {
       console.error('[Clipper] Download error:', chrome.runtime.lastError);
       showStatus('Download error: ' + chrome.runtime.lastError.message, 'error');
     } else {
-      showStatus('Clip saved!', 'success');
+      showStatus(extension === 'mp4' ? 'Clip saved as MP4!' : 'Clip saved as WebM!', 'success');
     }
     resetCaptureUI();
   });
