@@ -1,6 +1,6 @@
 // ============================================
 // CONTENT SCRIPT - youtube.com
-// Simplified: tries MP4 directly, falls back to WebM
+// Manual download only, cleaner UI
 // ============================================
 
 let clipPanel = null;
@@ -13,6 +13,14 @@ let safetyTimeout = null;
 let stopRequested = false;
 let audioContext = null;
 let audioDestination = null;
+
+let savedClip = {
+  blob: null,
+  url: null,
+  filename: null,
+  extension: null,
+  timestamp: null
+};
 
 // ============================================
 // YOUTUBE PLAYER UTILITIES
@@ -152,7 +160,7 @@ function createClipPanel() {
       </div>
       
       <div class="yt-clipper-info" id="yt-clipper-info">
-        Duration: <span id="yt-clipper-dur-display">0:00</span> <span style="color:#666;">(max 1:00)</span>
+        Duration: <span id="yt-clipper-dur-display">0:00</span> <span class="yt-clipper-max">(max 1:00)</span>
       </div>
       
       <div class="yt-clipper-actions">
@@ -161,11 +169,11 @@ function createClipPanel() {
       </div>
       
       <button class="yt-clipper-btn yt-clipper-btn-primary" id="yt-clipper-capture">
-        <span id="yt-clipper-capture-text">Capture Clip</span>
+        Capture Clip
       </button>
       
       <button class="yt-clipper-btn yt-clipper-btn-danger" id="yt-clipper-cancel" style="display:none;">
-        <span>Cancel Recording</span>
+        Cancel Recording
       </button>
       
       <div class="yt-clipper-progress" id="yt-clipper-progress" style="display:none;">
@@ -173,6 +181,21 @@ function createClipPanel() {
           <div class="yt-clipper-progress-fill" id="yt-clipper-progress-fill"></div>
         </div>
         <span id="yt-clipper-progress-text">Recording... 0%</span>
+      </div>
+      
+      <div class="yt-clipper-saved" id="yt-clipper-saved" style="display:none;">
+        <div class="yt-clipper-saved-header">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+          </svg>
+          <span>Clip ready</span>
+        </div>
+        <button class="yt-clipper-btn yt-clipper-btn-download" id="yt-clipper-download">
+          Download
+        </button>
+        <button class="yt-clipper-btn yt-clipper-btn-discard" id="yt-clipper-discard">
+          Discard
+        </button>
       </div>
       
       <div class="yt-clipper-status" id="yt-clipper-status"></div>
@@ -192,6 +215,8 @@ function setupPanelEvents() {
   const setEndBtn = document.getElementById('yt-clipper-set-end');
   const captureBtn = document.getElementById('yt-clipper-capture');
   const cancelBtn = document.getElementById('yt-clipper-cancel');
+  const downloadBtn = document.getElementById('yt-clipper-download');
+  const discardBtn = document.getElementById('yt-clipper-discard');
 
   if (closeBtn) {
     closeBtn.addEventListener('click', () => {
@@ -228,13 +253,10 @@ function setupPanelEvents() {
     }
   });
 
-  if (captureBtn) {
-    captureBtn.addEventListener('click', startCapture);
-  }
-
-  if (cancelBtn) {
-    cancelBtn.addEventListener('click', cancelCapture);
-  }
+  if (captureBtn) captureBtn.addEventListener('click', startCapture);
+  if (cancelBtn) cancelBtn.addEventListener('click', cancelCapture);
+  if (downloadBtn) downloadBtn.addEventListener('click', downloadSavedClip);
+  if (discardBtn) discardBtn.addEventListener('click', discardSavedClip);
 }
 
 function getTimeInput(prefix) {
@@ -315,11 +337,50 @@ function clearStatus() {
 }
 
 // ============================================
+// SAVED CLIP MANAGEMENT
+// ============================================
+
+function discardSavedClip() {
+  if (savedClip.url) {
+    URL.revokeObjectURL(savedClip.url);
+  }
+  savedClip = { blob: null, url: null, filename: null, extension: null, timestamp: null };
+
+  const savedSection = document.getElementById('yt-clipper-saved');
+  if (savedSection) savedSection.style.display = 'none';
+
+  clearStatus();
+}
+
+function downloadSavedClip() {
+  if (!savedClip.blob || !savedClip.url) {
+    showStatus('No clip available to download', 'error');
+    return;
+  }
+
+  chrome.runtime.sendMessage({
+    action: 'DOWNLOAD_CLIP',
+    blobUrl: savedClip.url,
+    filename: savedClip.filename,
+    extension: savedClip.extension,
+    saveAs: false
+  }, (response) => {
+    if (chrome.runtime.lastError) {
+      showStatus('Download error: ' + chrome.runtime.lastError.message, 'error');
+    } else {
+      showStatus('Clip Downloaded!', 'success');
+    }
+  });
+}
+
+// ============================================
 // CAPTURE LOGIC
 // ============================================
 
 async function startCapture() {
   if (isCapturing) return;
+
+  discardSavedClip();
 
   const startTime = getTimeInput('start');
   const endTime = getTimeInput('end');
@@ -347,10 +408,12 @@ async function startCapture() {
   const captureBtn = document.getElementById('yt-clipper-capture');
   const cancelBtn = document.getElementById('yt-clipper-cancel');
   const progress = document.getElementById('yt-clipper-progress');
+  const savedSection = document.getElementById('yt-clipper-saved');
 
   if (captureBtn) captureBtn.style.display = 'none';
   if (cancelBtn) cancelBtn.style.display = 'block';
   if (progress) progress.style.display = 'block';
+  if (savedSection) savedSection.style.display = 'none';
 
   try {
     await performRecording(video, startTime, endTime);
@@ -363,8 +426,6 @@ async function startCapture() {
 
 function cancelCapture() {
   if (!isCapturing) return;
-
-  console.log('[Clipper] User cancelled recording');
 
   stopRequested = true;
   isCapturing = false;
@@ -394,21 +455,11 @@ function cancelCapture() {
 
   if (recorder) {
     try {
-      if (recorder.state !== 'inactive') {
-        recorder.stop();
-      }
-    } catch (e) {
-      console.warn('[Clipper] Error stopping recorder:', e);
-    }
-
+      if (recorder.state !== 'inactive') recorder.stop();
+    } catch (e) { }
     try {
-      if (recorder.stream) {
-        recorder.stream.getTracks().forEach(t => t.stop());
-      }
-    } catch (e) {
-      console.warn('[Clipper] Error stopping tracks:', e);
-    }
-
+      if (recorder.stream) recorder.stream.getTracks().forEach(t => t.stop());
+    } catch (e) { }
     recorder = null;
   }
 
@@ -420,7 +471,6 @@ function cancelCapture() {
 async function performRecording(video, startTime, endTime) {
   const duration = endTime - startTime;
 
-  // Setup canvas
   const maxWidth = 1920;
   const scale = video.videoWidth > maxWidth ? maxWidth / video.videoWidth : 1;
   const canvasWidth = Math.floor(video.videoWidth * scale) || 1280;
@@ -431,11 +481,9 @@ async function performRecording(video, startTime, endTime) {
   canvas.height = canvasHeight;
   const ctx = canvas.getContext('2d', { alpha: false });
 
-  // Setup streams
   const canvasStream = canvas.captureStream(30);
   let combinedStream = canvasStream;
 
-  // Audio capture
   let audioCaptured = false;
 
   try {
@@ -459,7 +507,6 @@ async function performRecording(video, startTime, endTime) {
     try {
       audioContext = new (window.AudioContext || window.webkitAudioContext)();
       audioDestination = audioContext.createMediaStreamDestination();
-
       const source = audioContext.createMediaElementSource(video);
       source.connect(audioDestination);
       source.connect(audioContext.destination);
@@ -478,11 +525,6 @@ async function performRecording(video, startTime, endTime) {
     }
   }
 
-  // ============================================
-  // TRY MP4 FIRST, FALL BACK TO WEBM
-  // ============================================
-
-  // Check if browser supports MP4 recording (Chrome on macOS/Windows sometimes does)
   const mp4MimeTypes = [
     'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
     'video/mp4;codecs=h264,aac',
@@ -497,26 +539,21 @@ async function performRecording(video, startTime, endTime) {
 
   let selectedMimeType = '';
   let outputExtension = 'webm';
-  let isMp4 = false;
 
-  // Try MP4 first
   for (const type of mp4MimeTypes) {
     if (MediaRecorder.isTypeSupported(type)) {
       selectedMimeType = type;
       outputExtension = 'mp4';
-      isMp4 = true;
       console.log('[Clipper] Using native MP4 recording:', type);
       break;
     }
   }
 
-  // Fall back to WebM
   if (!selectedMimeType) {
     for (const type of webmMimeTypes) {
       if (MediaRecorder.isTypeSupported(type)) {
         selectedMimeType = type;
         outputExtension = 'webm';
-        isMp4 = false;
         console.log('[Clipper] Using WebM recording:', type);
         break;
       }
@@ -542,8 +579,6 @@ async function performRecording(video, startTime, endTime) {
   };
 
   recorder.onstop = () => {
-    console.log('[Clipper] Recorder stopped. stopRequested:', stopRequested, 'chunks:', recordingChunks.length);
-
     if (audioContext) {
       try { audioContext.close(); } catch (e) { }
       audioContext = null;
@@ -551,7 +586,7 @@ async function performRecording(video, startTime, endTime) {
     }
 
     if (!stopRequested) {
-      finalizeRecording(outputExtension);
+      finalizeRecording(outputExtension, duration);
     } else {
       recordingChunks = [];
       if (recorder && recorder.stream) {
@@ -571,7 +606,6 @@ async function performRecording(video, startTime, endTime) {
     }
   };
 
-  // Seek to start
   pauseVideo();
   await new Promise(r => setTimeout(r, 200));
   seekTo(startTime);
@@ -581,14 +615,9 @@ async function performRecording(video, startTime, endTime) {
     await audioContext.resume();
   }
 
-  // Start recording
   recorder.start(1000);
-  console.log('[Clipper] Recorder started, state:', recorder.state);
-
-  // Start playing
   playVideo();
 
-  // Frame draw loop
   const drawFrame = () => {
     if (!isCapturing) return;
     try {
@@ -600,7 +629,6 @@ async function performRecording(video, startTime, endTime) {
   };
   drawFrame();
 
-  // Progress monitoring
   const totalDuration = endTime - startTime;
   const progressFill = document.getElementById('yt-clipper-progress-fill');
   const progressText = document.getElementById('yt-clipper-progress-text');
@@ -622,7 +650,6 @@ async function performRecording(video, startTime, endTime) {
     }
   }, 250);
 
-  // Safety timeout
   safetyTimeout = setTimeout(() => {
     if (isCapturing) {
       console.warn('[Clipper] Safety timeout triggered');
@@ -634,16 +661,13 @@ async function performRecording(video, startTime, endTime) {
 function waitForVideoReady(video) {
   return new Promise((resolve) => {
     let resolved = false;
-
     const onSeeked = () => {
       if (resolved) return;
       resolved = true;
       video.removeEventListener('seeked', onSeeked);
       resolve();
     };
-
     video.addEventListener('seeked', onSeeked);
-
     setTimeout(() => {
       if (!resolved) {
         resolved = true;
@@ -656,8 +680,6 @@ function waitForVideoReady(video) {
 
 function stopRecording() {
   if (!isCapturing) return;
-
-  console.log('[Clipper] Stopping recording (normal completion)...');
 
   stopRequested = false;
 
@@ -681,22 +703,17 @@ function stopRecording() {
   if (recorder && recorder.state !== 'inactive') {
     try {
       recorder.stop();
-      console.log('[Clipper] Recorder.stop() called, state:', recorder.state);
     } catch (e) {
-      console.warn('[Clipper] Error stopping recorder:', e);
       isCapturing = false;
       resetCaptureUI();
     }
   } else {
-    console.log('[Clipper] Recorder already inactive');
     isCapturing = false;
     resetCaptureUI();
   }
 }
 
-function finalizeRecording(extension) {
-  console.log('[Clipper] Finalizing recording, chunks:', recordingChunks.length, 'extension:', extension);
-
+function finalizeRecording(extension, duration) {
   isCapturing = false;
 
   if (recorder && recorder.stream) {
@@ -713,32 +730,39 @@ function finalizeRecording(extension) {
 
   const blob = new Blob(recordingChunks, { type: recorder.mimeType });
   const blobUrl = URL.createObjectURL(blob);
-  console.log('[Clipper] Blob created:', blob.size, 'bytes');
 
   const filename = getVideoTitle().substring(0, 50).replace(/[^a-zA-Z0-9_-]/g, '_');
 
-  // Show format info
-  if (extension === 'webm') {
-    showStatus('Saved as WebM. Use a converter for Messenger.', 'info');
-  }
-
-  chrome.runtime.sendMessage({
-    action: 'DOWNLOAD_CLIP',
-    blobUrl: blobUrl,
+  savedClip = {
+    blob: blob,
+    url: blobUrl,
     filename: filename,
-    extension: extension
-  }, (response) => {
-    if (chrome.runtime.lastError) {
-      console.error('[Clipper] Download error:', chrome.runtime.lastError);
-      showStatus('Download error: ' + chrome.runtime.lastError.message, 'error');
-    } else {
-      showStatus(extension === 'mp4' ? 'Clip saved as MP4!' : 'Clip saved as WebM!', 'success');
-    }
-    resetCaptureUI();
-  });
+    extension: extension,
+    duration: duration,
+    timestamp: Date.now()
+  };
 
+  showSavedUI(extension, duration);
   recordingChunks = [];
   recorder = null;
+}
+
+function showSavedUI(extension, duration) {
+  const captureBtn = document.getElementById('yt-clipper-capture');
+  const cancelBtn = document.getElementById('yt-clipper-cancel');
+  const progress = document.getElementById('yt-clipper-progress');
+  const savedSection = document.getElementById('yt-clipper-saved');
+  const savedMeta = document.getElementById('yt-clipper-saved-meta');
+
+  if (captureBtn) captureBtn.style.display = 'block';
+  if (cancelBtn) cancelBtn.style.display = 'none';
+  if (progress) progress.style.display = 'none';
+  if (savedSection) savedSection.style.display = 'block';
+  if (savedMeta) {
+    savedMeta.textContent = `${extension.toUpperCase()} • ${formatTime(duration)}`;
+  }
+
+  clearStatus();
 }
 
 function resetCaptureUI() {
