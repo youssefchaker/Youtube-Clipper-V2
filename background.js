@@ -26,6 +26,6 @@ async function downloadClip(blobUrl, filename, extension = 'webm', saveAs = fals
   await chrome.downloads.download({
     url: blobUrl,
     filename: finalName,
-    saveAs: saveAs  // false = auto to Downloads, true = show dialog
+    saveAs: false
   });
 }

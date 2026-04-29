@@ -102,12 +102,10 @@ function injectClipButton() {
   const btn = document.createElement('button');
   btn.id = 'yt-clipper-btn';
 
-  // Exact YouTube tonal button classes for native look
   btn.className = 'yt-spec-button-shape-next yt-spec-button-shape-next--tonal yt-spec-button-shape-next--mono yt-spec-button-shape-next--size-m';
   btn.setAttribute('aria-label', 'Create clip');
   btn.setAttribute('title', 'Create a clip');
 
-  // Style attribute to ensure perfect match with neighboring buttons
   btn.style.cssText = `
     display: inline-flex;
     align-items: center;
@@ -128,7 +126,6 @@ function injectClipButton() {
     transition: background-color 0.2s ease;
   `;
 
-  // Scissors icon — matches YouTube's icon style
   btn.innerHTML = `
     <div class="yt-spec-button-shape-next__icon" style="display:flex;align-items:center;justify-content:center;width:24px;height:24px;flex-shrink:0;">
       <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
@@ -138,7 +135,6 @@ function injectClipButton() {
     <span class="yt-spec-button-shape-next__button-text-content" style="font-weight:500;">Clip</span>
   `;
 
-  // Hover effect matching YouTube's tonal buttons
   btn.addEventListener('mouseenter', () => {
     btn.style.background = 'rgba(255, 255, 255, 0.2)';
   });
@@ -155,7 +151,6 @@ function injectClipButton() {
     const isOpen = !!document.getElementById('yt-clipper-panel');
     toggleClipPanel();
 
-    // Toggle active visual state
     btn.style.background = isOpen ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)';
   });
 
@@ -227,10 +222,10 @@ function createClipPanel() {
           <span>Clip ready!</span>
         </div>
         <button class="yt-clipper-btn yt-clipper-btn-success" id="yt-clipper-download">
-          <span>💾 Save to Computer</span>
+          <span>💾 Save</span>
         </button>
         <button class="yt-clipper-btn yt-clipper-btn-discard" id="yt-clipper-discard">
-          <span>🗑 Discard</span>
+          <span>🗑️ Discard</span>
         </button>
       </div>
 
@@ -429,7 +424,6 @@ function discardSavedClip() {
   }
   savedClip = { blob: null, url: null, filename: null, extension: null, timestamp: null };
   hideSavedClipUI();
-  showStatus('Clip discarded', 'info');
 }
 
 function downloadSavedClip() {
@@ -438,7 +432,6 @@ function downloadSavedClip() {
     return;
   }
 
-  // Use chrome.downloads to open Save As dialog anywhere
   chrome.runtime.sendMessage({
     action: 'DOWNLOAD_CLIP',
     blobUrl: savedClip.url,
@@ -448,7 +441,6 @@ function downloadSavedClip() {
     if (chrome.runtime.lastError) {
       showStatus('Download error: ' + chrome.runtime.lastError.message, 'error');
     } else {
-      showStatus('Save dialog opened!', 'success');
     }
   });
 }
@@ -475,12 +467,10 @@ async function startCapture() {
   const endTime = getTimeInput('end');
 
   if (endTime <= startTime) {
-    showStatus('End time must be after start time', 'error');
     return;
   }
 
   if (endTime - startTime > 60) {
-    showStatus('Clip cannot exceed 1 minute', 'error');
     return;
   }
 
@@ -563,7 +553,6 @@ function cancelCapture() {
   }
 
   recordingChunks = [];
-  showStatus('Recording cancelled', 'info');
   resetCaptureUI();
 }
 
@@ -872,7 +861,6 @@ function finalizeRecording(extension) {
 
   // Show the saved clip UI
   showSavedClipUI();
-  showStatus(extension === 'mp4' ? 'Clip ready! Click Save to download.' : 'Clip ready (WebM)! Click Save to download.', 'success');
 }
 
 function resetCaptureUI() {
