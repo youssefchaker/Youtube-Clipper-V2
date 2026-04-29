@@ -829,6 +829,9 @@ function finalizeRecording(extension) {
 
   isCapturing = false;
 
+  // Store mimeType before we potentially null out recorder
+  const recordedMimeType = recorder ? recorder.mimeType : `video/${extension}`;
+
   if (recorder && recorder.stream) {
     recorder.stream.getTracks().forEach(t => {
       try { t.stop(); } catch (e) { }
@@ -841,7 +844,7 @@ function finalizeRecording(extension) {
     return;
   }
 
-  const blob = new Blob(recordingChunks, { type: recorder.mimeType });
+  const blob = new Blob(recordingChunks, { type: recordedMimeType });
   const blobUrl = URL.createObjectURL(blob);
   console.log('[Clipper] Blob created:', blob.size, 'bytes');
 
