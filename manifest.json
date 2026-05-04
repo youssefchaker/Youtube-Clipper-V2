@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
   "name": "YouTube Clipper",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "Clip and download segments from YouTube videos",
+  "minimum_chrome_version": "88",
   "permissions": [
     "activeTab",
     "downloads",
