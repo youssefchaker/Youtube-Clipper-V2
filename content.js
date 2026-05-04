@@ -922,6 +922,12 @@ function init() {
 
   observer.observe(document.body, { childList: true, subtree: true });
 
+  document.addEventListener('yt-navigate-start', () => {
+    if (isCapturing) cancelCapture();
+    discardOldClip();
+    if (clipPanel) closeClipPanel();
+  });
+
   document.addEventListener('yt-navigate-finish', () => {
     setTimeout(() => injectClipButton(), 1000);
   });
