@@ -292,6 +292,9 @@ function setupPanelEvents() {
     const el = document.getElementById(`yt-clipper-${id}`);
     if (el) {
       el.addEventListener('input', () => {
+        updateDurationDisplay();
+      });
+      el.addEventListener('blur', () => {
         enforceMaxDuration();
         updateDurationDisplay();
       });
@@ -316,9 +319,9 @@ function setupPanelEvents() {
 }
 
 function getTimeInput(prefix) {
-  const h = parseInt(document.getElementById(`yt-clipper-${prefix}-h`).value) || 0;
-  const m = parseInt(document.getElementById(`yt-clipper-${prefix}-m`).value) || 0;
-  const s = parseInt(document.getElementById(`yt-clipper-${prefix}-s`).value) || 0;
+  const h = parseInt(document.getElementById(`yt-clipper-${prefix}-h`)?.value) || 0;
+  const m = parseInt(document.getElementById(`yt-clipper-${prefix}-m`)?.value) || 0;
+  const s = parseInt(document.getElementById(`yt-clipper-${prefix}-s`)?.value) || 0;
   return h * 3600 + m * 60 + s;
 }
 
@@ -326,9 +329,14 @@ function setTimeInput(prefix, totalSeconds) {
   const h = Math.floor(totalSeconds / 3600);
   const m = Math.floor((totalSeconds % 3600) / 60);
   const s = Math.floor(totalSeconds % 60);
-  document.getElementById(`yt-clipper-${prefix}-h`).value = h;
-  document.getElementById(`yt-clipper-${prefix}-m`).value = m;
-  document.getElementById(`yt-clipper-${prefix}-s`).value = s;
+  
+  const hEl = document.getElementById(`yt-clipper-${prefix}-h`);
+  const mEl = document.getElementById(`yt-clipper-${prefix}-m`);
+  const sEl = document.getElementById(`yt-clipper-${prefix}-s`);
+  
+  if (hEl) hEl.value = h;
+  if (mEl) mEl.value = m;
+  if (sEl) sEl.value = s;
 }
 
 function enforceMaxDuration() {
@@ -340,7 +348,8 @@ function enforceMaxDuration() {
     end = maxEnd;
     setTimeInput('end', end);
   }
-  if (end < start) {
+  
+  if (end <= start) {
     end = start + 1;
     setTimeInput('end', end);
   }
@@ -350,7 +359,6 @@ function enforceMaxDuration() {
     setTimeInput('end', duration);
   }
 }
-
 function updateDurationDisplay() {
   const start = getTimeInput('start');
   const end = getTimeInput('end');
