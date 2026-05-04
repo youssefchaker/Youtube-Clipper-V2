@@ -45,6 +45,16 @@ A Chrome extension that lets you capture and download short clips from any YouTu
 
 ### 3. Set Your Start and End Times
 
+1.Play the video and pause at the moment you want the clip to begin
+
+2.Click "Set Start" — the start time fields update automatically
+
+3.Play the video and pause at the moment you want the clip to end
+
+4.Click "Set End" — the end time fields update automatically
+
+Tip: You can also type times manually in the HH:MM:SS fields if you know the exact timestamps.
+
 ### 4. Capture the Clip
 
 ### 5. Save Your Clip
