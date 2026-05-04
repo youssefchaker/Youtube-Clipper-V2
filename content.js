@@ -953,6 +953,12 @@ function init() {
     const video = getVideoElement();
     const actionsRow = document.querySelector('#actions #top-level-buttons-computed, ytd-menu-renderer#menu ytd-button-renderer, #top-level-buttons');
 
+      document.addEventListener('yt-navigate-start', () => {
+    if (isCapturing) cancelCapture();
+    discardOldClip();
+    if (clipPanel) closeClipPanel();
+  });
+
     if (video && actionsRow && !document.getElementById('yt-clipper-btn')) {
       injectClipButton();
     }
