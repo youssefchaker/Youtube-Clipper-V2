@@ -99,21 +99,11 @@ function injectClipButton() {
   const actionsRow = document.querySelector('#actions #top-level-buttons-computed, ytd-menu-renderer#menu ytd-button-renderer, #top-level-buttons');
   if (!actionsRow) return;
 
-  // Detect YouTube theme: check html attribute or computed background
-  const html = document.documentElement;
-  const isDark = html.getAttribute('dark') !== null && html.getAttribute('dark') !== 'false';
-  const isLight = !isDark || getComputedStyle(document.body).backgroundColor === 'rgb(255, 255, 255)';
-
   const btn = document.createElement('button');
   btn.id = 'yt-clipper-btn';
   btn.className = 'yt-spec-button-shape-next yt-spec-button-shape-next--tonal yt-spec-button-shape-next--mono yt-spec-button-shape-next--size-m';
   btn.setAttribute('aria-label', 'Create clip');
   btn.setAttribute('title', 'Create a clip');
-
-  // Theme-aware colors
-  const bgColor = isLight ? 'rgba(0, 0, 0, 0.05)' : 'rgba(255, 255, 255, 0.1)';
-  const bgHover = isLight ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.2)';
-  const textColor = isLight ? '#0f0f0f' : '#f1f1f1';
 
   btn.style.cssText = `
     display: inline-flex;
@@ -123,8 +113,8 @@ function injectClipButton() {
     margin-left: 8px;
     cursor: pointer;
     border-radius: 18px;
-    background: ${bgColor};
-    color: ${textColor};
+    background: rgba(255, 255, 255, 0.1);
+    color: #f1f1f1;
     border: none;
     padding: 0 16px;
     height: 36px;
@@ -145,12 +135,12 @@ function injectClipButton() {
   `;
 
   btn.addEventListener('mouseenter', () => {
-    btn.style.background = bgHover;
+    btn.style.background = 'rgba(255, 255, 255, 0.2)';
   });
 
   btn.addEventListener('mouseleave', () => {
     const isOpen = !!document.getElementById('yt-clipper-panel');
-    btn.style.background = isOpen ? bgHover : bgColor;
+    btn.style.background = isOpen ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.1)';
   });
 
   btn.addEventListener('click', (e) => {
@@ -158,11 +148,12 @@ function injectClipButton() {
     e.stopPropagation();
     const isOpen = !!document.getElementById('yt-clipper-panel');
     toggleClipPanel();
-    btn.style.background = isOpen ? bgColor : bgHover;
+    btn.style.background = isOpen ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)';
   });
 
   actionsRow.appendChild(btn);
 }
+
 // ============================================
 // CLIP PANEL UI
 // ============================================
@@ -186,22 +177,22 @@ function createClipPanel() {
         <div class="yt-clipper-field">
           <label>Start</label>
           <div class="yt-clipper-time-input">
-            <input type="number" id="yt-clipper-start-h" min="0" value="${Math.floor(currentTime / 3600)}" placeholder="HH">
+            <input type="text" inputmode="numeric" pattern="[0-9]*" id="yt-clipper-start-h" value="${Math.floor(currentTime / 3600)}" placeholder="HH">
             <span>:</span>
-            <input type="number" id="yt-clipper-start-m" min="0" max="59" value="${Math.floor((currentTime % 3600) / 60)}" placeholder="MM">
+            <input type="text" inputmode="numeric" pattern="[0-9]*" id="yt-clipper-start-m" value="${Math.floor((currentTime % 3600) / 60)}" placeholder="MM">
             <span>:</span>
-            <input type="number" id="yt-clipper-start-s" min="0" max="59" value="${Math.floor(currentTime % 60)}" placeholder="SS">
+            <input type="text" inputmode="numeric" pattern="[0-9]*" id="yt-clipper-start-s" value="${Math.floor(currentTime % 60)}" placeholder="SS">
           </div>
         </div>
 
         <div class="yt-clipper-field">
           <label>End</label>
           <div class="yt-clipper-time-input">
-            <input type="number" id="yt-clipper-end-h" min="0" value="${Math.floor(safeEnd / 3600)}" placeholder="HH">
+            <input type="text" inputmode="numeric" pattern="[0-9]*" id="yt-clipper-end-h" value="${Math.floor(safeEnd / 3600)}" placeholder="HH">
             <span>:</span>
-            <input type="number" id="yt-clipper-end-m" min="0" max="59" value="${Math.floor((safeEnd % 3600) / 60)}" placeholder="MM">
+            <input type="text" inputmode="numeric" pattern="[0-9]*" id="yt-clipper-end-m" value="${Math.floor((safeEnd % 3600) / 60)}" placeholder="MM">
             <span>:</span>
-            <input type="number" id="yt-clipper-end-s" min="0" max="59" value="${Math.floor(safeEnd % 60)}" placeholder="SS">
+            <input type="text" inputmode="numeric" pattern="[0-9]*" id="yt-clipper-end-s" value="${Math.floor(safeEnd % 60)}" placeholder="SS">
           </div>
         </div>
       </div>
@@ -274,7 +265,7 @@ function setupPanelEvents() {
     setStartBtn.addEventListener('click', () => {
       const t = getCurrentTime();
       setTimeInput('start', t);
-      enforceMaxDuration();
+      autoAdjustTimes();
       updateDurationDisplay();
     });
   }
@@ -283,26 +274,64 @@ function setupPanelEvents() {
     setEndBtn.addEventListener('click', () => {
       const t = getCurrentTime();
       setTimeInput('end', t);
-      enforceMaxDuration();
+      autoAdjustTimes();
       updateDurationDisplay();
     });
   }
 
+  // Input sanitization and validation
   ['start-h', 'start-m', 'start-s', 'end-h', 'end-m', 'end-s'].forEach(id => {
     const el = document.getElementById(`yt-clipper-${id}`);
     if (el) {
+      // Only allow numbers
+      el.addEventListener('keydown', (e) => {
+        // Allow: backspace, delete, tab, escape, enter, arrows, home, end
+        if ([8, 46, 9, 27, 13, 37, 38, 39, 40, 36, 35].includes(e.keyCode)) return;
+        // Allow: Ctrl+A, Ctrl+C, Ctrl+V, Ctrl+X
+        if ((e.ctrlKey || e.metaKey) && [65, 67, 86, 88].includes(e.keyCode)) return;
+        // Allow: numbers 0-9 (both main and numpad)
+        if ((e.keyCode >= 48 && e.keyCode <= 57) || (e.keyCode >= 96 && e.keyCode <= 105)) return;
+        e.preventDefault();
+      });
+
+      // Sanitize paste
+      el.addEventListener('paste', (e) => {
+        e.preventDefault();
+        const pasted = (e.clipboardData || window.clipboardData).getData('text');
+        const cleaned = pasted.replace(/\\D/g, '');
+        if (cleaned) {
+          const current = el.value.replace(/\\D/g, '');
+          el.value = cleaned;
+          autoAdjustTimes();
+          updateDurationDisplay();
+        }
+      });
+
+      // Sanitize input and auto-adjust on change
       el.addEventListener('input', () => {
+        // Remove non-digits
+        el.value = el.value.replace(/\\D/g, '');
+        // Remove leading zeros (but keep single 0)
+        if (el.value.length > 1) {
+          el.value = el.value.replace(/^0+/, '');
+        }
+        if (el.value === '') el.value = '0';
         updateDurationDisplay();
       });
+
+      // Auto-adjust when user finishes editing
       el.addEventListener('blur', () => {
-        enforceMaxDuration();
+        autoAdjustTimes();
         updateDurationDisplay();
       });
     }
   });
 
   if (captureBtn) {
-    captureBtn.addEventListener('click', startCapture);
+    captureBtn.addEventListener('click', () => {
+      autoAdjustTimes();
+      startCapture();
+    });
   }
 
   if (cancelBtn) {
@@ -322,51 +351,62 @@ function getTimeInput(prefix) {
   const h = parseInt(document.getElementById(`yt-clipper-${prefix}-h`)?.value) || 0;
   const m = parseInt(document.getElementById(`yt-clipper-${prefix}-m`)?.value) || 0;
   const s = parseInt(document.getElementById(`yt-clipper-${prefix}-s`)?.value) || 0;
-  return h * 3600 + m * 60 + s;
+  return h * 3600 + Math.min(59, m) * 60 + Math.min(59, s);
 }
 
 function setTimeInput(prefix, totalSeconds) {
+  totalSeconds = Math.max(0, totalSeconds);
   const h = Math.floor(totalSeconds / 3600);
   const m = Math.floor((totalSeconds % 3600) / 60);
   const s = Math.floor(totalSeconds % 60);
-  
+
   const hEl = document.getElementById(`yt-clipper-${prefix}-h`);
   const mEl = document.getElementById(`yt-clipper-${prefix}-m`);
   const sEl = document.getElementById(`yt-clipper-${prefix}-s`);
-  
+
   if (hEl) hEl.value = h;
   if (mEl) mEl.value = m;
   if (sEl) sEl.value = s;
 }
 
-function enforceMaxDuration() {
-  const start = getTimeInput('start');
-  let end = getTimeInput('end');
-  const maxEnd = start + 60;
+// ============================================
+// AUTO-ADJUST: keeps duration within 0-60s, adjusts both times as needed
+// ============================================
 
-  if (end > maxEnd) {
-    end = maxEnd;
-    setTimeInput('end', end);
-  }
-  
-  if (end <= start) {
-    end = start + 1;
-    setTimeInput('end', end);
-  }
-
+function autoAdjustTimes() {
   const duration = getDuration();
-  if (end > duration) {
-    setTimeInput('end', duration);
+  let start = getTimeInput('start');
+  let end = getTimeInput('end');
+
+  // Clamp to video bounds
+  start = Math.max(0, Math.min(start, duration));
+  end = Math.max(0, Math.min(end, duration));
+
+  // Ensure end >= start + 1 (minimum 1 second)
+  if (end <= start) {
+    end = Math.min(start + 1, duration);
   }
+
+  // Ensure duration <= 60 seconds
+  if (end - start > 60) {
+    end = start + 60;
+  }
+
+  // Apply adjusted values
+  setTimeInput('start', start);
+  setTimeInput('end', end);
 }
+
 function updateDurationDisplay() {
   const start = getTimeInput('start');
   const end = getTimeInput('end');
+  const dur = Math.max(0, end - start);
   const el = document.getElementById('yt-clipper-dur-display');
-  if (el) el.textContent = formatTime(end - start);
+  if (el) el.textContent = formatTime(dur);
 }
 
 function formatTime(seconds) {
+  seconds = Math.max(0, seconds);
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   const s = Math.floor(seconds % 60);
@@ -390,12 +430,15 @@ function closeClipPanel() {
     clipPanel = null;
   }
   const btn = document.getElementById('yt-clipper-btn');
-  if (btn) {
-    const html = document.documentElement;
-    const isDark = html.getAttribute('dark') !== null && html.getAttribute('dark') !== 'false';
-    const isLight = !isDark || getComputedStyle(document.body).backgroundColor === 'rgb(255, 255, 255)';
-    btn.style.background = isLight ? 'rgba(0, 0, 0, 0.05)' : 'rgba(255, 255, 255, 0.1)';
-  }
+  if (btn) btn.style.background = 'rgba(255, 255, 255, 0.1)';
+}
+
+function showStatus(msg, type = 'info') {
+  const el = document.getElementById('yt-clipper-status');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = `yt-clipper-status yt-clipper-status-${type}`;
+  el.style.display = 'block';
 }
 
 function clearStatus() {
@@ -452,7 +495,6 @@ function downloadSavedClip() {
   }, (response) => {
     if (chrome.runtime.lastError) {
       showStatus('Download error: ' + chrome.runtime.lastError.message, 'error');
-    } else {
     }
   });
 }
@@ -472,17 +514,18 @@ function discardOldClip() {
 async function startCapture() {
   if (isCapturing) return;
 
-  // Discard any previous clip before starting new capture
   discardOldClip();
 
   const startTime = getTimeInput('start');
   const endTime = getTimeInput('end');
 
   if (endTime <= startTime) {
+    showStatus('End time must be after start time', 'error');
     return;
   }
 
   if (endTime - startTime > 60) {
+    showStatus('Clip cannot exceed 1 minute', 'error');
     return;
   }
 
@@ -571,7 +614,6 @@ function cancelCapture() {
 async function performRecording(video, startTime, endTime) {
   const duration = endTime - startTime;
 
-  // Setup canvas
   const maxWidth = 1920;
   const scale = video.videoWidth > maxWidth ? maxWidth / video.videoWidth : 1;
   const canvasWidth = Math.floor(video.videoWidth * scale) || 1280;
@@ -582,11 +624,9 @@ async function performRecording(video, startTime, endTime) {
   canvas.height = canvasHeight;
   const ctx = canvas.getContext('2d', { alpha: false });
 
-  // Setup streams
   const canvasStream = canvas.captureStream(30);
   let combinedStream = canvasStream;
 
-  // Audio capture
   let audioCaptured = false;
 
   try {
@@ -629,7 +669,6 @@ async function performRecording(video, startTime, endTime) {
     }
   }
 
-  // Try MP4 first, fall back to WebM
   const mp4MimeTypes = [
     'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
     'video/mp4;codecs=h264,aac',
@@ -713,7 +752,6 @@ async function performRecording(video, startTime, endTime) {
     }
   };
 
-  // Seek to start
   pauseVideo();
   await new Promise(r => setTimeout(r, 200));
   seekTo(startTime);
@@ -723,14 +761,11 @@ async function performRecording(video, startTime, endTime) {
     await audioContext.resume();
   }
 
-  // Start recording
   recorder.start(1000);
   console.log('[Clipper] Recorder started, state:', recorder.state);
 
-  // Start playing
   playVideo();
 
-  // Frame draw loop
   const drawFrame = () => {
     if (!isCapturing) return;
     try {
@@ -742,7 +777,6 @@ async function performRecording(video, startTime, endTime) {
   };
   drawFrame();
 
-  // Progress monitoring
   const totalDuration = endTime - startTime;
   const progressFill = document.getElementById('yt-clipper-progress-fill');
   const progressText = document.getElementById('yt-clipper-progress-text');
@@ -764,7 +798,6 @@ async function performRecording(video, startTime, endTime) {
     }
   }, 250);
 
-  // Safety timeout
   safetyTimeout = setTimeout(() => {
     if (isCapturing) {
       console.warn('[Clipper] Safety timeout triggered');
@@ -841,7 +874,6 @@ function finalizeRecording(extension) {
 
   isCapturing = false;
 
-  // Store mimeType before we potentially null out recorder
   const recordedMimeType = recorder ? recorder.mimeType : `video/${extension}`;
 
   if (recorder && recorder.stream) {
@@ -862,7 +894,6 @@ function finalizeRecording(extension) {
 
   const filename = getVideoTitle().substring(0, 50).replace(/[^a-zA-Z0-9_-]/g, '_');
 
-  // Store in memory instead of downloading
   savedClip = {
     blob: blob,
     url: blobUrl,
@@ -874,7 +905,6 @@ function finalizeRecording(extension) {
   recordingChunks = [];
   recorder = null;
 
-  // Show the saved clip UI
   showSavedClipUI();
 }
 
@@ -929,12 +959,6 @@ function init() {
   });
 
   observer.observe(document.body, { childList: true, subtree: true });
-
-  document.addEventListener('yt-navigate-start', () => {
-    if (isCapturing) cancelCapture();
-    discardOldClip();
-    if (clipPanel) closeClipPanel();
-  });
 
   document.addEventListener('yt-navigate-finish', () => {
     setTimeout(() => injectClipButton(), 1000);
