@@ -1,6 +1,6 @@
 # YouTube Clipper
 
-A Chrome extension that lets you capture and download short clips from any YouTube video — directly from your browser, no external tools needed.
+An extension made for chromium browsers that lets you capture and download short clips from any YouTube video — directly from your browser, no external tools needed.
 
 ---
 
@@ -19,9 +19,9 @@ A Chrome extension that lets you capture and download short clips from any YouTu
 1. Download the project ZIP file to your computer
 2. Extract (unzip) it to a folder you can easily find
 
-### Step 2: Enable Developer Mode in Chrome
+### Step 2: Enable Developer
 
-1. Open Google Chrome
+1. Open Chromium browser
 2. Type this in the address bar and press **Enter**:
    ```
    chrome://extensions/
