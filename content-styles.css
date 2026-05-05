@@ -323,3 +323,16 @@
   background: #272727 !important;
   color: #fff !important;
 }
+
+.yt-clipper-header {
+  cursor: grab !important;
+  user-select: none !important;
+}
+
+#yt-clipper-panel.yt-clipper-dragging .yt-clipper-header {
+  cursor: grabbing !important;
+}
+
+#yt-clipper-panel.yt-clipper-dragging {
+  transition: none !important;
+}

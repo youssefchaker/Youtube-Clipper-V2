@@ -292,11 +292,8 @@ function setupPanelEvents() {
     if (el) {
       // Only allow numbers
       el.addEventListener('keydown', (e) => {
-        // Allow: backspace, delete, tab, escape, enter, arrows, home, end
         if ([8, 46, 9, 27, 13, 37, 38, 39, 40, 36, 35].includes(e.keyCode)) return;
-        // Allow: Ctrl+A, Ctrl+C, Ctrl+V, Ctrl+X
         if ((e.ctrlKey || e.metaKey) && [65, 67, 86, 88].includes(e.keyCode)) return;
-        // Allow: numbers 0-9 (both main and numpad)
         if ((e.keyCode >= 48 && e.keyCode <= 57) || (e.keyCode >= 96 && e.keyCode <= 105)) return;
         e.preventDefault();
       });
@@ -316,9 +313,7 @@ function setupPanelEvents() {
 
       // Sanitize input and auto-adjust on change
       el.addEventListener('input', () => {
-        // Remove non-digits
         el.value = el.value.replace(/\\D/g, '');
-        // Remove leading zeros (but keep single 0)
         if (el.value.length > 1) {
           el.value = el.value.replace(/^0+/, '');
         }
@@ -351,6 +346,47 @@ function setupPanelEvents() {
 
   if (discardBtn) {
     discardBtn.addEventListener('click', discardSavedClip);
+  }
+
+    const header = document.querySelector('.yt-clipper-header');
+  if (header && clipPanel) {
+    let isDragging = false;
+    let startX = 0, startY = 0;
+    let initialTransformX = 0, initialTransformY = 0;
+
+    const onMouseMove = (e) => {
+      if (!isDragging) return;
+      const dx = e.clientX - startX + initialTransformX;
+      const dy = e.clientY - startY + initialTransformY;
+      clipPanel.style.transform = `translate(${dx}px, ${dy}px)`;
+    };
+
+    const onMouseUp = () => {
+      if (!isDragging) return;
+      isDragging = false;
+      clipPanel.classList.remove('yt-clipper-dragging');
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+
+    header.addEventListener('mousedown', (e) => {
+      // Don't start drag if clicking the close button
+      if (e.target.closest('.yt-clipper-close')) return;
+
+      isDragging = true;
+      startX = e.clientX;
+      startY = e.clientY;
+
+      // Parse any existing transform to keep position across multiple drags
+      const transform = clipPanel.style.transform;
+      const match = transform.match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)/);
+      initialTransformX = match ? parseFloat(match[1]) : 0;
+      initialTransformY = match ? parseFloat(match[2]) : 0;
+
+      clipPanel.classList.add('yt-clipper-dragging');
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    });
   }
 }
 
