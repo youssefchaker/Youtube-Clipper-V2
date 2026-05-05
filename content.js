@@ -98,12 +98,19 @@ function injectClipButton() {
 
   const actionsRow = document.querySelector('#actions #top-level-buttons-computed, ytd-menu-renderer#menu ytd-button-renderer, #top-level-buttons');
   if (!actionsRow) return;
+  const html = document.documentElement;
+  const isDark = html.getAttribute('dark') !== null && html.getAttribute('dark') !== 'false';
+  const isLight = !isDark || getComputedStyle(document.body).backgroundColor === 'rgb(255, 255, 255)';
 
   const btn = document.createElement('button');
   btn.id = 'yt-clipper-btn';
   btn.className = 'yt-spec-button-shape-next yt-spec-button-shape-next--tonal yt-spec-button-shape-next--mono yt-spec-button-shape-next--size-m';
   btn.setAttribute('aria-label', 'Create clip');
   btn.setAttribute('title', 'Create a clip');
+
+  const bgColor = isLight ? 'rgba(0, 0, 0, 0.05)' : 'rgba(255, 255, 255, 0.1)';
+  const bgHover = isLight ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.2)';
+  const textColor = isLight ? '#0f0f0f' : '#f1f1f1';
 
   btn.style.cssText = `
     display: inline-flex;
@@ -113,8 +120,8 @@ function injectClipButton() {
     margin-left: 8px;
     cursor: pointer;
     border-radius: 18px;
-    background: rgba(255, 255, 255, 0.1);
-    color: #f1f1f1;
+    background: ${bgColor};
+    color: ${textColor};
     border: none;
     padding: 0 16px;
     height: 36px;
@@ -135,12 +142,12 @@ function injectClipButton() {
   `;
 
   btn.addEventListener('mouseenter', () => {
-    btn.style.background = 'rgba(255, 255, 255, 0.2)';
+    btn.style.background = bgHover;
   });
 
   btn.addEventListener('mouseleave', () => {
     const isOpen = !!document.getElementById('yt-clipper-panel');
-    btn.style.background = isOpen ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.1)';
+    btn.style.background = isOpen ? bgHover : bgColor;
   });
 
   btn.addEventListener('click', (e) => {
@@ -148,7 +155,7 @@ function injectClipButton() {
     e.stopPropagation();
     const isOpen = !!document.getElementById('yt-clipper-panel');
     toggleClipPanel();
-    btn.style.background = isOpen ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)';
+    btn.style.background = isOpen ? bgColor : bgHover;
   });
 
   actionsRow.appendChild(btn);
@@ -359,11 +366,11 @@ function setTimeInput(prefix, totalSeconds) {
   const h = Math.floor(totalSeconds / 3600);
   const m = Math.floor((totalSeconds % 3600) / 60);
   const s = Math.floor(totalSeconds % 60);
-
+  
   const hEl = document.getElementById(`yt-clipper-${prefix}-h`);
   const mEl = document.getElementById(`yt-clipper-${prefix}-m`);
   const sEl = document.getElementById(`yt-clipper-${prefix}-s`);
-
+  
   if (hEl) hEl.value = h;
   if (mEl) mEl.value = m;
   if (sEl) sEl.value = s;
@@ -430,7 +437,12 @@ function closeClipPanel() {
     clipPanel = null;
   }
   const btn = document.getElementById('yt-clipper-btn');
-  if (btn) btn.style.background = 'rgba(255, 255, 255, 0.1)';
+    if (btn) {
+    const html = document.documentElement;
+    const isDark = html.getAttribute('dark') !== null && html.getAttribute('dark') !== 'false';
+    const isLight = !isDark || getComputedStyle(document.body).backgroundColor === 'rgb(255, 255, 255)';
+    btn.style.background = isLight ? 'rgba(0, 0, 0, 0.05)' : 'rgba(255, 255, 255, 0.1)';
+  }
 }
 
 function showStatus(msg, type = 'info') {
@@ -965,6 +977,12 @@ function init() {
   });
 
   observer.observe(document.body, { childList: true, subtree: true });
+
+    document.addEventListener('yt-navigate-start', () => {
+    if (isCapturing) cancelCapture();
+    discardOldClip();
+    if (clipPanel) closeClipPanel();
+  });
 
   document.addEventListener('yt-navigate-finish', () => {
     setTimeout(() => injectClipButton(), 1000);
