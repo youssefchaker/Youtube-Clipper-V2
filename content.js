@@ -600,6 +600,10 @@ function cancelCapture() {
   pauseVideo();
 
   if (recorder) {
+    recorder.onstop = null;
+    recorder.ondataavailable = null;
+    recorder.onerror = null;
+
     try {
       if (recorder.state !== 'inactive') {
         recorder.stop();
@@ -620,6 +624,7 @@ function cancelCapture() {
   }
 
   recordingChunks = [];
+  discardOldClip();
   resetCaptureUI();
 }
 
@@ -885,6 +890,7 @@ function finalizeRecording(extension) {
   console.log('[Clipper] Finalizing recording, chunks:', recordingChunks.length, 'extension:', extension);
 
   isCapturing = false;
+  stopRequested = false;
 
   const recordedMimeType = recorder ? recorder.mimeType : `video/${extension}`;
 
@@ -922,7 +928,6 @@ function finalizeRecording(extension) {
 
 function resetCaptureUI() {
   isCapturing = false;
-  stopRequested = false;
 
   const captureBtn = document.getElementById('yt-clipper-capture');
   const cancelBtn = document.getElementById('yt-clipper-cancel');
