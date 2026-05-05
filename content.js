@@ -279,39 +279,29 @@ function setupPanelEvents() {
     });
   }
 
-  // Input sanitization and validation
   ['start-h', 'start-m', 'start-s', 'end-h', 'end-m', 'end-s'].forEach(id => {
     const el = document.getElementById(`yt-clipper-${id}`);
     if (el) {
-      // Only allow numbers
       el.addEventListener('keydown', (e) => {
-        // Allow: backspace, delete, tab, escape, enter, arrows, home, end
         if ([8, 46, 9, 27, 13, 37, 38, 39, 40, 36, 35].includes(e.keyCode)) return;
-        // Allow: Ctrl+A, Ctrl+C, Ctrl+V, Ctrl+X
         if ((e.ctrlKey || e.metaKey) && [65, 67, 86, 88].includes(e.keyCode)) return;
-        // Allow: numbers 0-9 (both main and numpad)
         if ((e.keyCode >= 48 && e.keyCode <= 57) || (e.keyCode >= 96 && e.keyCode <= 105)) return;
         e.preventDefault();
       });
 
-      // Sanitize paste
       el.addEventListener('paste', (e) => {
         e.preventDefault();
         const pasted = (e.clipboardData || window.clipboardData).getData('text');
         const cleaned = pasted.replace(/\\D/g, '');
         if (cleaned) {
-          const current = el.value.replace(/\\D/g, '');
           el.value = cleaned;
           autoAdjustTimes();
           updateDurationDisplay();
         }
       });
 
-      // Sanitize input and auto-adjust on change
       el.addEventListener('input', () => {
-        // Remove non-digits
         el.value = el.value.replace(/\\D/g, '');
-        // Remove leading zeros (but keep single 0)
         if (el.value.length > 1) {
           el.value = el.value.replace(/^0+/, '');
         }
@@ -319,7 +309,6 @@ function setupPanelEvents() {
         updateDurationDisplay();
       });
 
-      // Auto-adjust when user finishes editing
       el.addEventListener('blur', () => {
         autoAdjustTimes();
         updateDurationDisplay();
@@ -369,30 +358,22 @@ function setTimeInput(prefix, totalSeconds) {
   if (sEl) sEl.value = s;
 }
 
-// ============================================
-// AUTO-ADJUST: keeps duration within 0-60s, adjusts both times as needed
-// ============================================
-
 function autoAdjustTimes() {
   const duration = getDuration();
   let start = getTimeInput('start');
   let end = getTimeInput('end');
 
-  // Clamp to video bounds
   start = Math.max(0, Math.min(start, duration));
   end = Math.max(0, Math.min(end, duration));
 
-  // Ensure end >= start + 1 (minimum 1 second)
   if (end <= start) {
     end = Math.min(start + 1, duration);
   }
 
-  // Ensure duration <= 60 seconds
   if (end - start > 60) {
     end = start + 60;
   }
 
-  // Apply adjusted values
   setTimeInput('start', start);
   setTimeInput('end', end);
 }
@@ -458,11 +439,13 @@ function showSavedClipUI() {
   const captureBtn = document.getElementById('yt-clipper-capture');
   const cancelBtn = document.getElementById('yt-clipper-cancel');
   const progress = document.getElementById('yt-clipper-progress');
+  const converting = document.getElementById('yt-clipper-converting');
 
   if (savedDiv) savedDiv.style.display = 'block';
   if (captureBtn) captureBtn.style.display = 'none';
   if (cancelBtn) cancelBtn.style.display = 'none';
   if (progress) progress.style.display = 'none';
+  if (converting) converting.style.display = 'none';
 }
 
 function hideSavedClipUI() {
@@ -471,6 +454,21 @@ function hideSavedClipUI() {
 
   if (savedDiv) savedDiv.style.display = 'none';
   if (captureBtn) captureBtn.style.display = 'block';
+}
+
+function showConvertingUI() {
+  const converting = document.getElementById('yt-clipper-converting');
+  const progress = document.getElementById('yt-clipper-progress');
+  const cancelBtn = document.getElementById('yt-clipper-cancel');
+
+  if (converting) converting.style.display = 'flex';
+  if (progress) progress.style.display = 'none';
+  if (cancelBtn) cancelBtn.style.display = 'none';
+}
+
+function hideConvertingUI() {
+  const converting = document.getElementById('yt-clipper-converting');
+  if (converting) converting.style.display = 'none';
 }
 
 function discardSavedClip() {
@@ -509,6 +507,7 @@ function discardOldClip() {
     savedClip = { blob: null, url: null, filename: null, extension: null, timestamp: null };
   }
   hideSavedClipUI();
+  hideConvertingUI();
 }
 
 async function startCapture() {
@@ -520,18 +519,15 @@ async function startCapture() {
   const endTime = getTimeInput('end');
 
   if (endTime <= startTime) {
-    showStatus('End time must be after start time', 'error');
     return;
   }
 
   if (endTime - startTime > 60) {
-    showStatus('Clip cannot exceed 1 minute', 'error');
     return;
   }
 
   const video = getVideoElement();
   if (!video) {
-    showStatus('Video element not found', 'error');
     return;
   }
 
@@ -869,7 +865,86 @@ function stopRecording() {
   }
 }
 
-function finalizeRecording(extension) {
+// ============================================
+// FFMPEG.WASM CDN-BASED CONVERSION
+// ============================================
+
+let ffmpegLoaded = false;
+let ffmpeg = null;
+
+async function loadFFmpegFromCDN() {
+  if (ffmpegLoaded) return ffmpeg;
+
+  try {
+    await new Promise((resolve, reject) => {
+      if (window.FFmpegWASM) {
+        resolve();
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js';
+      script.onload = resolve;
+      script.onerror = () => reject(new Error('Failed to load ffmpeg.js from CDN'));
+      document.head.appendChild(script);
+    });
+
+    const { FFmpeg } = window.FFmpegWASM;
+    ffmpeg = new FFmpeg();
+
+    await ffmpeg.load({
+      coreURL: 'https://unpkg.com/@ffmpeg/core@0.24.6/dist/umd/ffmpeg-core.js',
+      wasmURL: 'https://unpkg.com/@ffmpeg/core@0.24.6/dist/umd/ffmpeg-core.wasm'
+    });
+
+    ffmpegLoaded = true;
+    console.log('[Clipper] FFmpeg loaded from CDN successfully');
+    return ffmpeg;
+  } catch (e) {
+    console.warn('[Clipper] FFmpeg CDN load failed:', e);
+    ffmpegLoaded = false;
+    ffmpeg = null;
+    return null;
+  }
+}
+
+async function convertWebMToMP4(webmBlob) {
+  if (!ffmpegLoaded || !ffmpeg) {
+    throw new Error('FFmpeg not available');
+  }
+
+  const inputName = 'input.webm';
+  const outputName = 'output.mp4';
+
+  // Write WebM to virtual filesystem
+  const arrayBuffer = await webmBlob.arrayBuffer();
+  await ffmpeg.writeFile(inputName, new Uint8Array(arrayBuffer));
+
+  // Convert to H.264/AAC MP4
+  await ffmpeg.exec([
+    '-i', inputName,
+    '-c:v', 'libx264',
+    '-preset', 'ultrafast',
+    '-crf', '23',
+    '-pix_fmt', 'yuv420p',
+    '-c:a', 'aac',
+    '-b:a', '128k',
+    '-movflags', '+faststart',
+    '-y',
+    outputName
+  ]);
+
+  // Read MP4 output
+  const mp4Data = await ffmpeg.readFile(outputName);
+  const mp4Blob = new Blob([mp4Data.buffer], { type: 'video/mp4' });
+
+  // Cleanup virtual filesystem
+  await ffmpeg.deleteFile(inputName);
+  await ffmpeg.deleteFile(outputName);
+
+  return mp4Blob;
+}
+
+async function finalizeRecording(extension) {
   console.log('[Clipper] Finalizing recording, chunks:', recordingChunks.length, 'extension:', extension);
 
   isCapturing = false;
@@ -888,24 +963,74 @@ function finalizeRecording(extension) {
     return;
   }
 
-  const blob = new Blob(recordingChunks, { type: recordedMimeType });
-  const blobUrl = URL.createObjectURL(blob);
-  console.log('[Clipper] Blob created:', blob.size, 'bytes');
+  const webmBlob = new Blob(recordingChunks, { type: recordedMimeType });
+  console.log('[Clipper] WebM blob created:', webmBlob.size, 'bytes');
 
   const filename = getVideoTitle().substring(0, 50).replace(/[^a-zA-Z0-9_-]/g, '_');
 
-  savedClip = {
-    blob: blob,
-    url: blobUrl,
-    filename: filename,
-    extension: extension,
-    timestamp: Date.now()
-  };
+  // If already MP4, skip conversion
+  if (extension === 'mp4') {
+    const blobUrl = URL.createObjectURL(webmBlob);
+    savedClip = {
+      blob: webmBlob,
+      url: blobUrl,
+      filename: filename,
+      extension: 'mp4',
+      timestamp: Date.now()
+    };
+    recordingChunks = [];
+    recorder = null;
+    showSavedClipUI();
+    return;
+  }
 
-  recordingChunks = [];
-  recorder = null;
+  showConvertingUI();
 
-  showSavedClipUI();
+  try {
+    const ffmpegInstance = await loadFFmpegFromCDN();
+    if (!ffmpegInstance) {
+      throw new Error('FFmpeg not available');
+    }
+
+    const mp4Blob = await convertWebMToMP4(webmBlob);
+    const mp4Url = URL.createObjectURL(mp4Blob);
+
+    savedClip = {
+      blob: mp4Blob,
+      url: mp4Url,
+      filename: filename,
+      extension: 'mp4',
+      timestamp: Date.now()
+    };
+
+    // Clean up the original WebM blob
+    webmBlob = null;
+
+    recordingChunks = [];
+    recorder = null;
+
+    hideConvertingUI();
+    showSavedClipUI();
+
+  } catch (err) {
+    console.error('[Clipper] Conversion failed:', err);
+
+    // Fallback: keep as WebM
+    const blobUrl = URL.createObjectURL(webmBlob);
+    savedClip = {
+      blob: webmBlob,
+      url: blobUrl,
+      filename: filename,
+      extension: 'webm',
+      timestamp: Date.now()
+    };
+
+    recordingChunks = [];
+    recorder = null;
+
+    hideConvertingUI();
+    showSavedClipUI();
+  }
 }
 
 function resetCaptureUI() {
@@ -917,6 +1042,7 @@ function resetCaptureUI() {
   const progress = document.getElementById('yt-clipper-progress');
   const progressFill = document.getElementById('yt-clipper-progress-fill');
   const progressText = document.getElementById('yt-clipper-progress-text');
+  const converting = document.getElementById('yt-clipper-converting');
 
   if (captureBtn) {
     captureBtn.style.display = 'block';
@@ -926,6 +1052,7 @@ function resetCaptureUI() {
   if (progress) progress.style.display = 'none';
   if (progressFill) progressFill.style.width = '0%';
   if (progressText) progressText.textContent = 'Recording... 0%';
+  if (converting) converting.style.display = 'none';
 }
 
 // ============================================
@@ -953,12 +1080,6 @@ function init() {
     const video = getVideoElement();
     const actionsRow = document.querySelector('#actions #top-level-buttons-computed, ytd-menu-renderer#menu ytd-button-renderer, #top-level-buttons');
 
-      document.addEventListener('yt-navigate-start', () => {
-    if (isCapturing) cancelCapture();
-    discardOldClip();
-    if (clipPanel) closeClipPanel();
-  });
-
     if (video && actionsRow && !document.getElementById('yt-clipper-btn')) {
       injectClipButton();
     }
@@ -968,6 +1089,12 @@ function init() {
 
   document.addEventListener('yt-navigate-finish', () => {
     setTimeout(() => injectClipButton(), 1000);
+  });
+
+  document.addEventListener('yt-navigate-start', () => {
+    if (isCapturing) cancelCapture();
+    discardOldClip();
+    if (clipPanel) closeClipPanel();
   });
 
   setTimeout(() => injectClipButton(), 2000);
