@@ -21,17 +21,17 @@ An extension made for chromium browsers that lets you capture and download short
 
 ### Step 2: Enable Developer
 
-1. Open Chromium browser
+1. Open browser
 2. Type this in the address bar and press **Enter**:
    ```
    chrome://extensions/
    ```
-3. Look for the **"Developer mode"** toggle in the top-right corner
-4. Turn it **ON** (it will turn blue)
+3. Look for the **"Developer mode"** toggle
+4. Turn it **ON**
 
 ### Step 3: Load the Extension
 
-1. Click the **"Load unpacked"** button that appears in the top-left
+1. Click the **"Load unpacked"** button
 2. A file picker will open — navigate to the folder where you extracted the ZIP
 3. **Select the folder** (not individual files) and click **"Select Folder"**
 
